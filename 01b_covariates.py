@@ -376,17 +376,24 @@ def run_mimic(skip_map=False):
             m |= code.str.startswith(c)
         return set(df.loc[m, "hadm_id"])
 
-    # aortic procedures: ICD-9 384x/3845; ICD-10-PCS thoracic aorta 021W/02RW/02QW/02UW/02VW/02WW
+    # aortic procedures: ICD-9 384x; ICD-10-PCS thoracic aorta (W=descending, X=ascending/arch)
+    # W = Thoracic Aorta, Descending; X = Thoracic Aorta, Ascending/Arch
     AORTIC_CODES = (
         "3834",
         "3844",
         "3845",
         "021W",
+        "021X",
         "02RW",
+        "02RX",
         "02QW",
+        "02QX",
         "02UW",
+        "02UX",
         "02VW",
+        "02VX",
         "02WW",
+        "02WX",
     )
     aortic = _pref(px, AORTIC_CODES)
     # prior cardiac surgery (redo proxy): status codes for CABG/valve prostheses
