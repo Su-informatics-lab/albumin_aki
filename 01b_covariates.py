@@ -7,22 +7,21 @@ BEFORE the landmark PS step. Emits time-stamped event streams; all windowing
 (ICU0->T0, T0->24h, 24->48/72h) is done downstream in R at each patient's T0.
 
 Two-tier per the agreed design:
-  MIMIC = full   : vasopressors, ventilation, MAP, crystalloid/colloid,
-                   blood products, urine + chest-tube drainage, diuretics,
-                   extended coag/chem labs, surgery-granularity flags.
+  MIMIC = full   : vasopressors, ventilation (segments + charted settings), MAP,
+                   crystalloid/colloid, blood products, urine + chest-tube drainage,
+                   diuretics, extended coag/chem labs, surgery-granularity flags.
   eICU  = light  : vasopressor (binary/count usable), apache day-1 vent flag,
-                   MAP, extended labs, aortic/emergency flags.
+                   MAP (arterial OR noninvasive), extended labs, aortic/emergency flags.
 
-All itemids are either confirmed from probe_albumin_yan.py or derived at runtime
-from d_items / d_labitems by regex (same logic as the probe). Nothing hardcoded
-that wasn't verified.
+All itemids are either confirmed from the probe or derived at runtime from
+d_items / d_labitems by regex. Nothing hardcoded that wasn't verified.
 
 Outputs -> ~/albumin_aki/results/ (patient-level; DUA => never commit, gitignore).
 
 Usage (Tempest):
   module purge; module load Python/3.10.8-GCCcore-12.2.0; source ~/alcrx/.venv/bin/activate
-  python 01b_covariates.py mimic          # full (chartevents MAP scan is the slow step)
-  python 01b_covariates.py mimic nomap    # skip MAP (chartevents) for a fast first pass
+  python 01b_covariates.py mimic          # full (chartevents MAP+vent scan is the slow step)
+  python 01b_covariates.py mimic nomap    # skip chartevents (MAP + ventset) for a fast pass
   python 01b_covariates.py eicu
 """
 
@@ -252,6 +251,7 @@ def run_mimic(skip_map=False):
     pe["t_start_h"] = off_dt(pe, "starttime", intime)
     pe["t_end_h"] = off_dt(pe, "endtime", intime)
     pe["mode"] = pe.itemid.map(VENT)
+    n_seg_pid = pe["stay_id"].nunique()
     _save(
         pe[["stay_id", "t_start_h", "t_end_h", "mode"]].rename(
             columns={"stay_id": "pid"}
@@ -259,31 +259,51 @@ def run_mimic(skip_map=False):
         "strm_vent_mimic.csv",
     )
 
-    # ---------- chartevents: MAP (slow) ----------
+    # ---------- chartevents: MAP + ventilator-setting presence (one scan; slow) ----------
     if skip_map:
-        print("  chartevents MAP: SKIPPED (nomap)")
+        print("  chartevents MAP + ventset: SKIPPED (nomap)")
     else:
-        print("  chartevents: MAP (scans ~430M rows; slow) ...")
+        print("  chartevents: MAP + ventilator settings (scans ~430M rows; slow) ...")
         MAP = items(
             r"^arterial blood pressure mean|^non invasive blood pressure mean",
             "chartevents",
         )
+        # vent-specific settings (chart only when mechanically ventilated); FiO2 excluded
+        # to avoid NIV / high-flow false positives.
+        VSET = items(
+            r"ventilator mode|peep set|tidal volume|respiratory rate \(set\)",
+            "chartevents",
+        )
+        ci = set(MAP) | set(VSET)
         ce = _chunk(
             _resolve(MIMIC_ICU, "chartevents"),
             ["stay_id", "charttime", "itemid", "valuenum"],
             "stay_id",
             stays,
             "itemid",
-            set(MAP),
+            ci,
             chunk=8_000_000,
         )
-        ce = ce[ce.valuenum.between(20, 200)]
         ce["offset_h"] = off_dt(ce, "charttime", intime)
+
+        cm = ce[ce.itemid.isin(set(MAP)) & ce.valuenum.between(20, 200)]
         _save(
-            ce[["stay_id", "offset_h", "valuenum"]].rename(
+            cm[["stay_id", "offset_h", "valuenum"]].rename(
                 columns={"stay_id": "pid", "valuenum": "map"}
             ),
             "strm_map_mimic.csv",
+        )
+
+        cv = ce[ce.itemid.isin(set(VSET))].copy()
+        cv["hr"] = np.floor(cv.offset_h)  # thin to 1 row/stay/hour
+        cv = cv.sort_values(["stay_id", "offset_h"]).drop_duplicates(["stay_id", "hr"])
+        _save(
+            cv[["stay_id", "offset_h"]].rename(columns={"stay_id": "pid"}),
+            "strm_ventset_mimic.csv",
+        )
+        print(
+            f"     vent coverage: segments={100*n_seg_pid/n:.1f}%  "
+            f"charted-settings={100*cv.stay_id.nunique()/n:.1f}%"
         )
 
     # ---------- labevents: extended coag/chem ----------
@@ -333,7 +353,7 @@ def run_mimic(skip_map=False):
         "labs_ext_mimic.csv",
     )
 
-    # ---------- surgery granularity (static flags) ----------
+    # ---------- surgery granularity (static flags) + aortic audit ----------
     print("  diagnoses_icd / procedures_icd / admissions: surgery flags ...")
     px = pd.read_csv(
         _resolve(MIMIC_HOSP, "procedures_icd"),
@@ -357,9 +377,18 @@ def run_mimic(skip_map=False):
         return set(df.loc[m, "hadm_id"])
 
     # aortic procedures: ICD-9 384x/3845; ICD-10-PCS thoracic aorta 021W/02RW/02QW/02UW/02VW/02WW
-    aortic = _pref(
-        px, ["3834", "3844", "3845", "021W", "02RW", "02QW", "02UW", "02VW", "02WW"]
+    AORTIC_CODES = (
+        "3834",
+        "3844",
+        "3845",
+        "021W",
+        "02RW",
+        "02QW",
+        "02UW",
+        "02VW",
+        "02WW",
     )
+    aortic = _pref(px, AORTIC_CODES)
     # prior cardiac surgery (redo proxy): status codes for CABG/valve prostheses
     redo = _pref(dx, ["V4581", "V433", "Z951", "Z952", "Z953", "Z954"])
     emerg_types = {"EW EMER.", "DIRECT EMER.", "URGENT"}
@@ -372,8 +401,38 @@ def run_mimic(skip_map=False):
     print(
         f"    aortic={surg.surg_aortic.mean()*100:.1f}%  "
         f"prior_cardiac={surg.prior_cardiac_surgery.mean()*100:.1f}%  "
-        f"emergency={surg.adm_emergency.mean()*100:.1f}%"
+        f"emergency={surg.adm_emergency.mean()*100:.1f}%  "
+        f"(NB: emergency = hospital admission_type, not surgical urgency)"
     )
+
+    # aortic audit: which aorta/thoracic procedure codes actually appear (for clinical review)
+    try:
+        dpx = pd.read_csv(_resolve(MIMIC_HOSP, "d_icd_procedures"))
+        lab = dict(zip(zip(dpx.icd_code.astype(str), dpx.icd_version), dpx.long_title))
+        pa = px.copy()
+        pa["long_title"] = [
+            lab.get((str(c), v), "?") for c, v in zip(pa.icd_code, pa.icd_version)
+        ]
+        cand = pa[
+            pa.long_title.astype(str).str.contains(
+                r"aort|thoracic", case=False, na=False
+            )
+        ]
+        top = (
+            cand.groupby(["icd_version", "icd_code", "long_title"])
+            .size()
+            .sort_values(ascending=False)
+            .head(15)
+        )
+        print("    AORTIC AUDIT (top aorta/thoracic procedure codes in cohort):")
+        for (v, c, t), cnt in top.items():
+            mark = (
+                "*" if str(c).replace(".", "").upper().startswith(AORTIC_CODES) else " "
+            )
+            print(f"      {mark} ICD{v} {str(c):<7} n={cnt:<4} {str(t)[:64]}")
+        print("      (* = currently counted as surg_aortic; review the rest with Yan)")
+    except Exception as e:
+        print(f"    (aortic audit skipped: {e})")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -438,6 +497,10 @@ def run_eicu():
             ].rename(columns={"patientunitstayid": "pid", "drugrate": "rate"}),
             "strm_vaso_eicu.csv",
         )
+        print(
+            "     NB: coverage ~23% and hospital-confounded (infusionDrug not universally"
+            " interfaced) -> treat as informative missingness; likely excluded from eICU PS."
+        )
     else:
         print("    infusionDrug empty")
 
@@ -458,22 +521,31 @@ def run_eicu():
     else:
         print("    apachePredVar empty/columns differ")
 
-    # ---------- MAP: vitalPeriodic.systemicmean ----------
-    print("  vitalPeriodic: MAP (systemicmean) ...")
+    # ---------- MAP: vitalPeriodic (arterial OR noninvasive) ----------
+    print("  vitalPeriodic: MAP (systemicmean OR noninvasivemean) ...")
     vp = _eicu_chunk(
         "vitalPeriodic",
         pids,
-        ["patientunitstayid", "observationoffset", "systemicmean"],
+        ["patientunitstayid", "observationoffset", "systemicmean", "noninvasivemean"],
         chunk=4_000_000,
     )
     if len(vp):
-        vp = vp[pd.to_numeric(vp.systemicmean, errors="coerce").between(20, 200)]
+        sm = pd.to_numeric(vp.get("systemicmean"), errors="coerce")
+        nm = pd.to_numeric(vp.get("noninvasivemean"), errors="coerce")
+        vp["map"] = sm.where(sm.notna(), nm)
+        vp["source"] = np.where(sm.notna(), "art", np.where(nm.notna(), "nibp", "na"))
+        vp = vp[vp["map"].between(20, 200)]
         vp["offset_h"] = vp.observationoffset / 60.0
         _save(
-            vp[["patientunitstayid", "offset_h", "systemicmean"]].rename(
-                columns={"patientunitstayid": "pid", "systemicmean": "map"}
+            vp[["patientunitstayid", "offset_h", "map", "source"]].rename(
+                columns={"patientunitstayid": "pid"}
             ),
             "strm_map_eicu.csv",
+        )
+        art = vp[vp.source == "art"].patientunitstayid.nunique()
+        print(
+            f"     MAP coverage {100*vp.patientunitstayid.nunique()/n:.1f}% "
+            f"(arterial {100*art/n:.1f}%, rest NIBP)"
         )
     else:
         print("    vitalPeriodic empty")
@@ -518,8 +590,8 @@ def run_eicu():
     else:
         print("    lab empty")
 
-    # ---------- surgery flags ----------
-    print("  patient: aortic / emergency flags ...")
+    # ---------- surgery flags (aortic valve-excluded; emergency = admit source) ----------
+    print("  patient: aortic (valve-excluded) / emergency flags ...")
     pat = pd.read_csv(
         _resolve(EICU, "patient"),
         usecols=lambda c: c
@@ -533,6 +605,15 @@ def run_eicu():
     )
     pat = pat[pat.patientunitstayid.isin(pids)].copy()
     dxs = pat.apacheadmissiondx.astype(str).str.lower()
+    aorta_pos = dxs.str.contains(
+        r"aneurysm|dissection|thoracic aort|aorta repair|"
+        r"aorta resection|aortic graft",
+        na=False,
+        regex=True,
+    )
+    aorta_bare = dxs.str.contains(
+        r"\baorta\b", na=False, regex=True
+    ) & ~dxs.str.contains("valve", na=False)
     src = (
         pat.get("hospitaladmitsource", pd.Series("", index=pat.index)).astype(str)
         + " "
@@ -541,15 +622,15 @@ def run_eicu():
     surg = pd.DataFrame(
         {
             "pid": pat.patientunitstayid,
-            "surg_aortic": dxs.str.contains(
-                r"aortic|aorta|dissection", na=False
-            ).astype(int),
-            "adm_emergency": src.str.contains("emergency", na=False).astype(int),
+            "surg_aortic": (aorta_pos | aorta_bare).astype(int).values,
+            "adm_emergency": src.str.contains("emergency", na=False).astype(int).values,
         }
     )
     _save(surg, "surg_eicu.csv")
     print(
-        f"    aortic={surg.surg_aortic.mean()*100:.1f}%  emergency={surg.adm_emergency.mean()*100:.1f}%"
+        f"    aortic (valve-excluded)={surg.surg_aortic.mean()*100:.1f}%  "
+        f"emergency={surg.adm_emergency.mean()*100:.1f}%  "
+        f"(NB: emergency = admit source, not surgical urgency)"
     )
 
 
