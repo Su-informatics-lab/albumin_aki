@@ -530,8 +530,17 @@ def run_eicu():
         chunk=4_000_000,
     )
     if len(vp):
-        sm = pd.to_numeric(vp.get("systemicmean"), errors="coerce")
-        nm = pd.to_numeric(vp.get("noninvasivemean"), errors="coerce")
+        nan_s = pd.Series(np.nan, index=vp.index)
+        sm = (
+            pd.to_numeric(vp["systemicmean"], errors="coerce")
+            if "systemicmean" in vp.columns
+            else nan_s
+        )
+        nm = (
+            pd.to_numeric(vp["noninvasivemean"], errors="coerce")
+            if "noninvasivemean" in vp.columns
+            else nan_s
+        )
         vp["map"] = sm.where(sm.notna(), nm)
         vp["source"] = np.where(sm.notna(), "art", np.where(nm.notna(), "nibp", "na"))
         vp = vp[vp["map"].between(20, 200)]
