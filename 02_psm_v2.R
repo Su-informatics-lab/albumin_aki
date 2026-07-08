@@ -194,31 +194,36 @@ if (!is.null(surg)) {
 # 4. ASSEMBLE ANALYSIS DATA
 # ═══════════════════════════════════════════════════════════════════
 cat("  assembling analysis data ...\n")
+# safe column getter: returns NA vector if column missing
+sc <- function(col) {
+  v <- lm_pts[[col]]
+  if (is.null(v)) { cat(sprintf("    WARNING: column '%s' not in did_all, filling NA\n", col)); rep(NA, n_lm) }
+  else v
+}
 ad <- data.frame(
   pid        = lm_pts$pid,
   treated    = lm_pts$treated_24h,
-  # from did_all (existing)
-  age        = lm_pts$age,
-  is_female  = lm_pts$is_female,
-  bmi        = lm_pts$bmi,
-  surg_cabg  = lm_pts$surg_cabg,
-  surg_valve = lm_pts$surg_valve,
-  surg_combined = lm_pts$surg_combined,
-  heart_failure = lm_pts$heart_failure,
-  hypertension  = lm_pts$hypertension,
-  diabetes      = lm_pts$diabetes,
-  ckd           = lm_pts$ckd,
-  copd          = lm_pts$copd,
-  pvd           = lm_pts$pvd,
-  stroke        = lm_pts$stroke,
-  liver_disease = lm_pts$liver_disease,
-  egfr          = lm_pts$egfr,
-  hemoglobin    = lm_pts$last_hemoglobin,
-  calcium       = lm_pts$last_calcium,
-  lactate       = lm_pts$last_lactate,
-  lactate_missing = lm_pts$last_lactate_missing,
-  heartrate     = lm_pts$last_heartrate,
-  first_cr      = lm_pts$first_cr,
+  age        = sc("age"),
+  is_female  = sc("is_female"),
+  bmi        = sc("bmi"),
+  surg_cabg  = sc("surg_cabg"),
+  surg_valve = sc("surg_valve"),
+  surg_combined = sc("surg_combined"),
+  heart_failure = sc("heart_failure"),
+  hypertension  = sc("hypertension"),
+  diabetes      = sc("diabetes"),
+  ckd           = sc("ckd"),
+  copd          = sc("copd"),
+  pvd           = sc("pvd"),
+  stroke        = sc("stroke"),
+  liver_disease = sc("liver_disease"),
+  egfr          = sc("egfr"),
+  hemoglobin    = sc("last_hemoglobin"),
+  calcium       = sc("last_calcium"),
+  lactate       = sc("last_lactate"),
+  lactate_missing = sc("last_lactate_missing"),
+  heartrate     = sc("last_heartrate"),
+  first_cr      = sc("first_cr"),
   stringsAsFactors = FALSE
 )
 # add new covariates
