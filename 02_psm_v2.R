@@ -152,9 +152,13 @@ val_col_lr <- if ("labresult" %in% names(labs_raw)) "labresult" else "value"
 labs_raw$offset_h <- as.numeric(labs_raw$offset_h)
 labs_raw[[val_col_lr]] <- as.numeric(labs_raw[[val_col_lr]])
 name_col_lr <- if ("lab_name" %in% names(labs_raw)) "lab_name" else "labname"
+cat(sprintf("  labs_raw: %d rows, id_col=pid, val=%s, name=%s\n", nrow(labs_raw), val_col_lr, name_col_lr))
+cat(sprintf("  labs_raw lab names: %s\n", paste(head(sort(unique(labs_raw[[name_col_lr]])), 20), collapse=", ")))
 orig_labs <- list()
 for (lab in c("hemoglobin","calcium","lactate","heartrate")) {
   orig_labs[[lab]] <- first_in_window(labs_raw, val_col=val_col_lr, name_col=name_col_lr, name_val=lab)
+  pres <- sum(!is.na(orig_labs[[lab]]))
+  cat(sprintf("    %s: %d/%d non-NA (%.1f%%)\n", lab, pres, length(pids), 100*pres/length(pids)))
 }
 orig_labs[["lactate_missing"]] <- setNames(as.integer(is.na(orig_labs[["lactate"]])), pids)
 
@@ -267,6 +271,13 @@ if (length(missing_ps) > 0) cat(sprintf("  WARNING: PS vars missing: %s\n", past
 
 cat(sprintf("  PS shared model: %d vars\n", length(avail)))
 
+# NA diagnostics
+cat("  NA rates per PS var:\n")
+for (v in avail) {
+  nr <- sum(is.na(ad[[v]]))
+  cat(sprintf("    %-18s %5d (%5.1f%%)\n", v, nr, 100*nr/nrow(ad)))
+}
+
 # MICE
 ad_mice <- ad[, c("treated", avail)]
 cat(sprintf("  running MICE (m=%d) ...\n", M_IMP))
@@ -303,6 +314,16 @@ all_matches <- list()
 for (m in 1:M_IMP) {
   d_m <- complete(imp, m)
   all_matches[[m]] <- match_one(d_m)
+  if (m == 1) {
+    # diagnostic on first imputation
+    ps_fml <- as.formula(paste("treated ~", paste(avail, collapse="+")))
+    fit1 <- glm(ps_fml, data=d_m, family=binomial)
+    ps1 <- predict(fit1, type="response")
+    cat(sprintf("    [imp1] PS range: [%.4f, %.4f]  sd=%.4f  caliper=%.4f\n",
+                min(ps1,na.rm=T), max(ps1,na.rm=T), sd(ps1,na.rm=T), CALIPER_SD*sd(ps1,na.rm=T)))
+    cat(sprintf("    [imp1] PS NAs: %d  matched: %d pairs\n",
+                sum(is.na(ps1)), nrow(all_matches[[1]])))
+  }
 }
 
 # Pool: keep pairs that appear in >= 50% of imputations
@@ -321,12 +342,13 @@ smd_check <- function(var) {
   c_vals <- ad[[var]][ad$pid %in% pairs$ctl_pid]
   mn_t <- mean(t_vals, na.rm=TRUE); mn_c <- mean(c_vals, na.rm=TRUE)
   sd_p <- sqrt((var(t_vals, na.rm=TRUE) + var(c_vals, na.rm=TRUE)) / 2)
-  if (sd_p == 0) return(0)
+  if (is.na(sd_p) || sd_p == 0) return(NA_real_)
   abs(mn_t - mn_c) / sd_p
 }
 cat("\n  Balance (SMD > 0.05 flagged):\n")
 for (v in avail) {
   s <- smd_check(v)
+  if (is.na(s)) { cat(sprintf("    %-18s   NA\n", v)); next }
   flag <- ifelse(s > 0.10, " ***", ifelse(s > 0.05, " *", ""))
   cat(sprintf("    %-18s %.3f%s\n", v, s, flag))
 }
