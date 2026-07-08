@@ -358,12 +358,11 @@ for (v in avail) {
 # ═══════════════════════════════════════════════════════════════════
 cat("\n  PRIMARY: KDIGO 2-3 or RRT (24h -> 7d)\n")
 compute_aki23_7d <- function(pid_val) {
-  # RRT after 24h
   row <- all_pts[all_pts$pid == pid_val, ]
-  if (!is.na(row$rrt_offset_h) && row$rrt_offset_h > 24 && row$rrt_offset_h <= 168) return(1L)
-  # Cr-based KDIGO 2-3: ratio >= 2.0 (stage 2) or >= 3.0 (stage 3)
-  bl_cr <- row$first_cr
-  if (is.na(bl_cr) || bl_cr <= 0) return(NA)
+  if (nrow(row) == 0) return(NA_integer_)
+  if (!is.na(row$rrt_offset_h[1]) && row$rrt_offset_h[1] > 24 && row$rrt_offset_h[1] <= 168) return(1L)
+  bl_cr <- row$first_cr[1]
+  if (is.na(bl_cr) || bl_cr <= 0) return(NA_integer_)
   pt_cr <- cr_all[cr_all$pid == pid_val & cr_all$offset_h > 24 & cr_all$offset_h <= 168, ]
   if (nrow(pt_cr) == 0) return(0L)
   ratios <- pt_cr$labresult / bl_cr
@@ -371,8 +370,8 @@ compute_aki23_7d <- function(pid_val) {
   0L
 }
 
-pairs$aki23_trt <- sapply(pairs$trt_pid, compute_aki23_7d)
-pairs$aki23_ctl <- sapply(pairs$ctl_pid, compute_aki23_7d)
+pairs$aki23_trt <- vapply(pairs$trt_pid, compute_aki23_7d, NA_integer_)
+pairs$aki23_ctl <- vapply(pairs$ctl_pid, compute_aki23_7d, NA_integer_)
 
 valid <- !is.na(pairs$aki23_trt) & !is.na(pairs$aki23_ctl)
 cat(sprintf("    valid pairs: %d\n", sum(valid)))
@@ -430,8 +429,8 @@ write.csv(did_df, file.path(RESULTS, sprintf("did_results_%s.csv", tag)), row.na
 cat("\n  Binary secondary endpoints\n")
 
 compute_binary <- function(outcome_fn, label) {
-  y_t <- sapply(pairs$trt_pid, outcome_fn)
-  y_c <- sapply(pairs$ctl_pid, outcome_fn)
+  y_t <- vapply(pairs$trt_pid, outcome_fn, NA_integer_)
+  y_c <- vapply(pairs$ctl_pid, outcome_fn, NA_integer_)
   v <- !is.na(y_t) & !is.na(y_c)
   nv <- sum(v)
   if (nv < 10) return(data.frame(db=db, outcome=label, n=nv, rate_trt=NA, rate_ctl=NA,
@@ -450,18 +449,20 @@ compute_binary <- function(outcome_fn, label) {
 
 # AKI outcomes (any KDIGO, stage 1+, from 24h)
 aki_any_fn <- function(pid_val) {
-  bl <- all_pts$first_cr[all_pts$pid == pid_val]; if (is.na(bl) || bl <= 0) return(NA)
+  bl <- all_pts$first_cr[all_pts$pid == pid_val]
+  if (length(bl) == 0 || is.na(bl[1]) || bl[1] <= 0) return(NA_integer_)
   pt <- cr_all[cr_all$pid == pid_val & cr_all$offset_h > 24 & cr_all$offset_h <= 168, ]
   if (nrow(pt) == 0) return(0L)
-  any((pt$labresult - bl) >= 0.3 | pt$labresult / bl >= 1.5, na.rm=TRUE) * 1L
+  as.integer(any((pt$labresult - bl[1]) >= 0.3 | pt$labresult / bl[1] >= 1.5, na.rm=TRUE))
 }
 
 # Mortality
 mort_fn <- function(pid_val) {
   row <- all_pts[all_pts$pid == pid_val, ]
-  if ("hosp_mortality" %in% names(row)) return(as.integer(row$hosp_mortality))
-  if ("mortality" %in% names(row)) return(as.integer(row$mortality))
-  NA
+  if (nrow(row) == 0) return(NA_integer_)
+  if ("hosp_mortality" %in% names(row)) return(as.integer(row$hosp_mortality[1]))
+  if ("mortality" %in% names(row)) return(as.integer(row$mortality[1]))
+  NA_integer_
 }
 
 # F-MPAO components from streams (precompute for speed)
