@@ -259,22 +259,27 @@ def run_mimic(skip_map=False):
         "strm_vent_mimic.csv",
     )
 
-    # ---------- chartevents: MAP + ventilator-setting presence (one scan; slow) ----------
+    # ---------- chartevents: MAP + ventset + vitals (one scan; slow) ----------
     if skip_map:
-        print("  chartevents MAP + ventset: SKIPPED (nomap)")
+        print("  chartevents MAP + ventset + vitals: SKIPPED (nomap)")
     else:
-        print("  chartevents: MAP + ventilator settings (scans ~430M rows; slow) ...")
+        print("  chartevents: MAP + ventset + vitals (scans ~430M rows; slow) ...")
         MAP = items(
             r"^arterial blood pressure mean|^non invasive blood pressure mean",
             "chartevents",
         )
-        # vent-specific settings (chart only when mechanically ventilated); FiO2 excluded
-        # to avoid NIV / high-flow false positives.
         VSET = items(
             r"ventilator mode|peep set|tidal volume|respiratory rate \(set\)",
             "chartevents",
         )
-        ci = set(MAP) | set(VSET)
+        # PS vitals: temperature, SpO2, FiO2 (value), PEEP (value)
+        TEMP = items(r"^temperature f", "chartevents")  # Fahrenheit; convert downstream
+        if not TEMP:
+            TEMP = items(r"^temperature c", "chartevents")
+        SPO2 = items(r"spo2|o2 saturation pulseoxymetry", "chartevents")
+        FIO2 = items(r"inspired o2 fraction", "chartevents")  # 223835
+        PEEP = items(r"^peep set", "chartevents")  # 220339
+        ci = set(MAP) | set(VSET) | set(TEMP) | set(SPO2) | set(FIO2) | set(PEEP)
         ce = _chunk(
             _resolve(MIMIC_ICU, "chartevents"),
             ["stay_id", "charttime", "itemid", "valuenum"],
@@ -286,6 +291,7 @@ def run_mimic(skip_map=False):
         )
         ce["offset_h"] = off_dt(ce, "charttime", intime)
 
+        # MAP (existing)
         cm = ce[ce.itemid.isin(set(MAP)) & ce.valuenum.between(20, 200)]
         _save(
             cm[["stay_id", "offset_h", "valuenum"]].rename(
@@ -294,8 +300,9 @@ def run_mimic(skip_map=False):
             "strm_map_mimic.csv",
         )
 
+        # ventset (existing)
         cv = ce[ce.itemid.isin(set(VSET))].copy()
-        cv["hr"] = np.floor(cv.offset_h)  # thin to 1 row/stay/hour
+        cv["hr"] = np.floor(cv.offset_h)
         cv = cv.sort_values(["stay_id", "offset_h"]).drop_duplicates(["stay_id", "hr"])
         _save(
             cv[["stay_id", "offset_h"]].rename(columns={"stay_id": "pid"}),
@@ -306,6 +313,29 @@ def run_mimic(skip_map=False):
             f"charted-settings={100*cv.stay_id.nunique()/n:.1f}%"
         )
 
+        # NEW: vitals (temp, SpO2, FiO2, PEEP with numeric values)
+        item2vital = {}
+        for nm, d in [
+            ("temperature", TEMP),
+            ("spo2", SPO2),
+            ("fio2", FIO2),
+            ("peep", PEEP),
+        ]:
+            for i in d:
+                item2vital[i] = nm
+        vt = ce[ce.itemid.isin(set(item2vital))].copy()
+        vt["vital"] = vt.itemid.map(item2vital)
+        vt = vt.dropna(subset=["valuenum"])
+        _save(
+            vt[["stay_id", "vital", "offset_h", "valuenum"]].rename(
+                columns={"stay_id": "pid", "valuenum": "value"}
+            ),
+            "strm_vitals_mimic.csv",
+        )
+        for v in ["temperature", "spo2", "fio2", "peep"]:
+            cov = vt[vt.vital == v].stay_id.nunique()
+            print(f"     {v:<12} {100*cov/n:.1f}%")
+
     # ---------- labevents: extended coag/chem ----------
     print("  labevents: extended coag/chem (by hadm) ...")
     LABRX = {
@@ -314,8 +344,13 @@ def run_mimic(skip_map=False):
         "pt": r"prothrombin time|^pt$",
         "ptt": r"^ptt|partial thromboplastin",
         "sodium": r"^sodium",
+        "potassium": r"^potassium",
+        "chloride": r"^chloride",
+        "magnesium": r"^magnesium",
         "bun": r"urea nitrogen",
         "bicarbonate": r"^bicarbonate",
+        "ph": r"^ph$",
+        "base_excess": r"base excess",
         "bilirubin": r"bilirubin, total",
         "alt": r"alanine amino",
         "ast": r"aspartate amino|asparate amino",
@@ -440,6 +475,104 @@ def run_mimic(skip_map=False):
         print("      (* = currently counted as surg_aortic; review the rest with Yan)")
     except Exception as e:
         print(f"    (aortic audit skipped: {e})")
+
+    # ---------- albumin dose (grams) from inputevents ----------
+    print("  albumin dose: grams by concentration ...")
+    from importlib.machinery import SourceFileLoader
+
+    try:
+        cfg = SourceFileLoader(
+            "cfg", os.path.join(os.path.dirname(__file__), "00_config.py")
+        ).load_module()
+        ALB_MAP = (
+            cfg.ALB_PRODUCT_MAP
+        )  # {220862: "albumin_25pct", 220864: "albumin_5pct"}
+    except Exception:
+        ALB_MAP = {220862: "albumin_25pct", 220864: "albumin_5pct"}
+    CONC = {"albumin_25pct": 0.25, "albumin_5pct": 0.05}
+    a_ie = _chunk(
+        _resolve(MIMIC_ICU, "inputevents"),
+        ["stay_id", "starttime", "itemid", "amount", "amountuom"],
+        "stay_id",
+        stays,
+        "itemid",
+        set(ALB_MAP),
+        chunk=5_000_000,
+    )
+    if len(a_ie):
+        a_ie["offset_h"] = off_dt(a_ie, "starttime", intime)
+        a_ie["product"] = a_ie.itemid.map(ALB_MAP)
+        ml = a_ie.amountuom.astype(str).str.lower().str.contains("ml")
+        a_ie = a_ie[ml & (a_ie.offset_h >= 0)].copy()
+        a_ie["grams"] = a_ie.amount * a_ie.product.map(CONC)
+        # per-infusion detail
+        _save(
+            a_ie[["stay_id", "product", "offset_h", "amount", "grams"]].rename(
+                columns={"stay_id": "pid", "amount": "amount_ml"}
+            ),
+            "strm_albdose_mimic.csv",
+        )
+        # 0-24h cumulative
+        a24 = (
+            a_ie[a_ie.offset_h <= 24]
+            .groupby("stay_id")
+            .agg(
+                total_ml=("amount", "sum"),
+                total_g=("grams", "sum"),
+                n_infusions=("grams", "size"),
+                pct5_ml=(
+                    "amount",
+                    lambda x: x[a_ie.loc[x.index, "product"] == "albumin_5pct"].sum(),
+                ),
+                pct25_ml=(
+                    "amount",
+                    lambda x: x[a_ie.loc[x.index, "product"] == "albumin_25pct"].sum(),
+                ),
+            )
+            .reset_index()
+            .rename(columns={"stay_id": "pid"})
+        )
+        _save(a24, "alb_dose_24h_mimic.csv")
+    else:
+        print("    (no albumin infusion rows found)")
+
+    # ---------- Cr variants (from existing did_cr_all) ----------
+    print("  Cr variants: first_icu_3h / first_icu_6h / pre_icu ...")
+    cr_path = os.path.join(RESULTS, "did_cr_all_mimic.csv")
+    if os.path.exists(cr_path):
+        cr = pd.read_csv(cr_path)
+        cr = cr.rename(columns={"stay_id": "pid"} if "stay_id" in cr.columns else {})
+        if "pid" not in cr.columns and cr.columns[0] != "pid":
+            cr = cr.rename(columns={cr.columns[0]: "pid"})
+        cr["labresult"] = pd.to_numeric(
+            cr.get("labresult", cr.get("value")), errors="coerce"
+        )
+        cr["offset_h"] = pd.to_numeric(cr.get("offset_h"), errors="coerce")
+        cr = cr.dropna(subset=["labresult", "offset_h"])
+
+        def _first_in(df, lo, hi):
+            sub = df[(df.offset_h >= lo) & (df.offset_h <= hi)]
+            return sub.sort_values("offset_h").groupby("pid").labresult.first()
+
+        v3 = _first_in(cr, 0, 3).rename("first_icu_cr_3h")
+        v6 = _first_in(cr, 0, 6).rename("first_icu_cr_6h")
+        vpre = (
+            cr[cr.offset_h < 0]
+            .sort_values("offset_h", ascending=False)
+            .groupby("pid")
+            .labresult.first()
+            .rename("pre_icu_cr")
+        )
+        variants = pd.DataFrame({"pid": list(stays)}).set_index("pid")
+        for s in [v3, v6, vpre]:
+            variants = variants.join(s, how="left")
+        variants = variants.reset_index()
+        _save(variants, "cr_variants_mimic.csv")
+        for c in ["first_icu_cr_3h", "first_icu_cr_6h", "pre_icu_cr"]:
+            pres = variants[c].notna().sum()
+            print(f"     {c:<20} {100*pres/n:.1f}%")
+    else:
+        print(f"    (did_cr_all_mimic.csv not found; run 01_etl.py first)")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -579,8 +712,12 @@ def run_eicu():
             "pt": r"^pt\b|prothrombin",
             "ptt": r"ptt",
             "sodium": r"^sodium",
+            "potassium": r"^potassium",
+            "chloride": r"^chloride",
+            "magnesium": r"^magnesium",
             "bun": r"bun",
             "bicarbonate": r"bicarbonate|hco3|total co2",
+            "ph": r"^ph$",
             "bilirubin": r"total bilirubin",
             "wbc": r"wbc",
             "hct": r"hct|hematocrit",
