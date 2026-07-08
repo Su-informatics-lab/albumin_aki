@@ -141,36 +141,46 @@ def run():
             print(f"    death              {pct(int(mort.sum()), n)}")
 
         bl = _load(f"strm_blood_{db}.csv")
-        if bl is not None:
-            rbc4 = (
-                bl[(bl.product == "RBC") & (bl.offset_h <= 48)]
+        if bl is not None and "product" in bl.columns:
+            rbc48 = (
+                bl[(bl["product"] == "RBC") & (bl.offset_h <= 48)]
                 .groupby("pid")
                 .amount.sum()
             )
-            n_rbc4 = (rbc4 >= 4).sum()  # crude: 4 events ~ 4 units
-            print(f"    RBC>=4 events 0-48h {pct(n_rbc4, n)}")
+            # MIMIC amount is mL; ~300 mL/unit => 4 units ~ 1200 mL
+            n_rbc4 = (rbc48 >= 1200).sum()
+            print(f"    RBC>=4U (>=1200mL) 0-48h {pct(n_rbc4, n)}  (n={n_rbc4})")
 
         out = _load(f"strm_output_{db}.csv")
-        if out is not None:
+        if out is not None and "kind" in out.columns:
             ct48 = (
                 out[(out.kind == "chesttube") & (out.offset_h <= 48)]
                 .groupby("pid")
                 .amount_ml.sum()
             )
             n_drain = (ct48 > 1500).sum()
-            print(f"    drainage>1500mL 0-48h {pct(n_drain, n)}")
+            print(f"    drainage>1500mL 0-48h {pct(n_drain, n)}  (n={n_drain})")
 
         vent = _load(f"strm_vent_{db}.csv")
-        if vent is not None:
-            dur = vent.groupby("pid").t_end_h.max()
+        if vent is not None and "t_end_h" in vent.columns:
+            dur = vent.groupby("pid")["t_end_h"].max()
             n_mv48 = (dur > 48).sum()
-            print(f"    MV>48h             {pct(n_mv48, n)}")
+            print(f"    MV>48h             {pct(n_mv48, n)}  (n={n_mv48})")
+        elif vent is not None:
+            print(
+                f"    MV>48h             (no t_end_h column; {db} vent is binary only)"
+            )
 
         vaso = _load(f"strm_vaso_{db}.csv")
-        if vaso is not None:
-            vdur = vaso.groupby("pid").t_end_h.max()
+        if vaso is not None and "t_end_h" in vaso.columns:
+            vdur = vaso.groupby("pid")["t_end_h"].max()
             n_v48 = (vdur > 48).sum()
-            print(f"    vasopressor>48h    {pct(n_v48, n)}")
+            print(f"    vasopressor>48h    {pct(n_v48, n)}  (n={n_v48})")
+        elif vaso is not None:
+            # eICU: offset_h is point-in-time, use last record as proxy
+            last = vaso.groupby("pid")["offset_h"].max()
+            n_v48 = (last > 48).sum()
+            print(f"    vasopressor>48h    ~{pct(n_v48, n)} (proxy: last record >48h)")
 
 
 if __name__ == "__main__":
