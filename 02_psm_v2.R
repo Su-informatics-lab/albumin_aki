@@ -60,6 +60,16 @@ llm      <- safe_read(sprintf("llm_endpoints_%s.csv", tag))
 n_all <- nrow(all_pts)
 cat(sprintf("  loaded: %d patients\n", n_all))
 
+# normalize ID columns: MIMIC uses stay_id, eICU uses patientunitstayid, we want pid
+norm_pid <- function(df) {
+  if (is.null(df) || "pid" %in% names(df)) return(df)
+  if ("stay_id" %in% names(df)) { names(df)[names(df)=="stay_id"] <- "pid"; return(df) }
+  if ("patientunitstayid" %in% names(df)) { names(df)[names(df)=="patientunitstayid"] <- "pid"; return(df) }
+  df
+}
+cr_all   <- norm_pid(cr_all)
+labs_raw <- norm_pid(labs_raw)
+
 # ═══════════════════════════════════════════════════════════════════
 # 2. 24h LANDMARK
 # ═══════════════════════════════════════════════════════════════════
