@@ -28,8 +28,10 @@ CR_WINDOW  <- 12
 
 args <- commandArgs(trailingOnly = TRUE)
 tag  <- tolower(args[1])
-if (!tag %in% c("mimic","eicu")) stop("Usage: Rscript 02_psm_v2.R {mimic|eicu}")
+if (!tag %in% c("mimic","eicu")) stop("Usage: Rscript 02_psm_v2.R {mimic|eicu} [mice_m]")
 db   <- toupper(tag)
+# Optional: override MICE m (e.g., Rscript 02_psm_v2.R mimic 5 for quick test)
+if (length(args) >= 2) M_IMP <- as.integer(args[2])
 cat(sprintf("\n  02_psm_v2 [%s]\n", db))
 
 safe_read <- function(name) {
@@ -143,6 +145,19 @@ for (lab in ext_lab_names) {
   ext_labs[[lab]] <- first_in_window(labs_ext, val_col="value", name_col="lab_name", name_val=lab)
 }
 
+# Original labs from did_labs_all (hemoglobin, calcium, lactate, heartrate)
+# These were in the v1 PS but not in labs_ext; extract 0-6h first value
+labs_raw <- norm_pid(labs_raw)
+val_col_lr <- if ("labresult" %in% names(labs_raw)) "labresult" else "value"
+labs_raw$offset_h <- as.numeric(labs_raw$offset_h)
+labs_raw[[val_col_lr]] <- as.numeric(labs_raw[[val_col_lr]])
+name_col_lr <- if ("lab_name" %in% names(labs_raw)) "lab_name" else "labname"
+orig_labs <- list()
+for (lab in c("hemoglobin","calcium","lactate","heartrate")) {
+  orig_labs[[lab]] <- first_in_window(labs_raw, val_col=val_col_lr, name_col=name_col_lr, name_val=lab)
+}
+orig_labs[["lactate_missing"]] <- setNames(as.integer(is.na(orig_labs[["lactate"]])), pids)
+
 # Vitals (0-6h first, MIMIC only)
 vital_vars <- list()
 if (!is.null(vitals)) {
@@ -218,11 +233,11 @@ ad <- data.frame(
   stroke        = sc("stroke"),
   liver_disease = sc("liver_disease"),
   egfr          = sc("egfr"),
-  hemoglobin    = sc("last_hemoglobin"),
-  calcium       = sc("last_calcium"),
-  lactate       = sc("last_lactate"),
-  lactate_missing = sc("last_lactate_missing"),
-  heartrate     = sc("last_heartrate"),
+  hemoglobin    = orig_labs[["hemoglobin"]][as.character(lm_pts$pid)],
+  calcium       = orig_labs[["calcium"]][as.character(lm_pts$pid)],
+  lactate       = orig_labs[["lactate"]][as.character(lm_pts$pid)],
+  lactate_missing = orig_labs[["lactate_missing"]][as.character(lm_pts$pid)],
+  heartrate     = orig_labs[["heartrate"]][as.character(lm_pts$pid)],
   first_cr      = sc("first_cr"),
   stringsAsFactors = FALSE
 )
