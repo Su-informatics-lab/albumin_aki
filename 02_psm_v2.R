@@ -285,55 +285,37 @@ imp <- tryCatch(mice(ad_mice, m=M_IMP, method="pmm", printFlag=FALSE, seed=2026)
                 error=function(e) { cat(sprintf("  MICE error: %s\n", e$message)); NULL })
 if (is.null(imp)) stop("MICE failed")
 
-# PS + matching across imputations
-match_one <- function(dat) {
-  ps_fml <- as.formula(paste("treated ~", paste(avail, collapse="+")))
-  fit <- glm(ps_fml, data=dat, family=binomial)
-  dat$ps <- predict(fit, type="response")
-  ps_sd <- sd(dat$ps, na.rm=TRUE)
-  cal <- CALIPER_SD * ps_sd
-
-  trt_idx <- which(dat$treated == 1)
-  ctl_idx <- which(dat$treated == 0)
-  matched <- data.frame(trt_pid=integer(0), ctl_pid=integer(0))
-
-  for (ti in trt_idx) {
-    diffs <- abs(dat$ps[ctl_idx] - dat$ps[ti])
-    best <- which.min(diffs)
-    if (diffs[best] <= cal) {
-      matched <- rbind(matched, data.frame(trt_pid=ad$pid[ti], ctl_pid=ad$pid[ctl_idx[best]]))
-      ctl_idx <- ctl_idx[-best]
-    }
-    if (length(ctl_idx) == 0) break
-  }
-  matched
-}
-
-cat("  matching across imputations ...\n")
-all_matches <- list()
+# PS + matching: average PS across imputations, match once (Mitra & Reiter 2016 "across")
+cat("  computing PS across imputations ...\n")
+ps_mat <- matrix(NA_real_, nrow=nrow(ad_mice), ncol=M_IMP)
 for (m in 1:M_IMP) {
   d_m <- complete(imp, m)
-  all_matches[[m]] <- match_one(d_m)
-  if (m == 1) {
-    # diagnostic on first imputation
-    ps_fml <- as.formula(paste("treated ~", paste(avail, collapse="+")))
-    fit1 <- glm(ps_fml, data=d_m, family=binomial)
-    ps1 <- predict(fit1, type="response")
-    cat(sprintf("    [imp1] PS range: [%.4f, %.4f]  sd=%.4f  caliper=%.4f\n",
-                min(ps1,na.rm=T), max(ps1,na.rm=T), sd(ps1,na.rm=T), CALIPER_SD*sd(ps1,na.rm=T)))
-    cat(sprintf("    [imp1] PS NAs: %d  matched: %d pairs\n",
-                sum(is.na(ps1)), nrow(all_matches[[1]])))
+  ps_fml <- as.formula(paste("treated ~", paste(avail, collapse="+")))
+  fit <- glm(ps_fml, data=d_m, family=binomial)
+  ps_mat[, m] <- predict(fit, type="response")
+}
+ad$ps <- rowMeans(ps_mat, na.rm=TRUE)
+
+ps_sd <- sd(ad$ps, na.rm=TRUE)
+cal <- CALIPER_SD * ps_sd
+cat(sprintf("  PS: mean=%.4f sd=%.4f caliper=%.4f\n", mean(ad$ps), ps_sd, cal))
+
+cat("  matching 1:1 nearest-neighbor ...\n")
+trt_idx <- which(ad$treated == 1)
+ctl_idx <- which(ad$treated == 0)
+# shuffle treated to avoid order bias
+set.seed(2026)
+trt_idx <- sample(trt_idx)
+pairs <- data.frame(trt_pid=integer(0), ctl_pid=integer(0))
+for (ti in trt_idx) {
+  if (length(ctl_idx) == 0) break
+  diffs <- abs(ad$ps[ctl_idx] - ad$ps[ti])
+  best <- which.min(diffs)
+  if (diffs[best] <= cal) {
+    pairs <- rbind(pairs, data.frame(trt_pid=ad$pid[ti], ctl_pid=ad$pid[ctl_idx[best]]))
+    ctl_idx <- ctl_idx[-best]
   }
 }
-
-# Pool: keep pairs that appear in >= 50% of imputations
-pair_key <- function(df) paste(df$trt_pid, df$ctl_pid, sep="_")
-all_keys <- unlist(lapply(all_matches, pair_key))
-freq <- table(all_keys)
-stable <- names(freq[freq >= M_IMP / 2])
-ref <- all_matches[[1]]
-ref$key <- pair_key(ref)
-pairs <- ref[ref$key %in% stable, c("trt_pid","ctl_pid")]
 cat(sprintf("  matched pairs: %d (from %d treated)\n", nrow(pairs), n_trt))
 
 # SMD check
