@@ -14,6 +14,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
@@ -347,6 +348,31 @@ def flatten_result(meta: pd.Series, result: CardiacSurgeryEndpoints) -> dict[str
     return row
 
 
+def extract_note_row(
+    hadm_id: str,
+    full_text: str,
+    meta_data: dict[str, Any],
+    client: CatChatClient,
+    *,
+    max_chars: int,
+    max_retries: int,
+    max_tokens: int,
+) -> tuple[dict[str, Any], bool]:
+    meta = pd.Series(meta_data)
+    bhc = extract_bhc(full_text, max_chars=max_chars)
+    try:
+        result = extract_one(
+            bhc,
+            client,
+            max_retries=max_retries,
+            max_tokens=max_tokens,
+        )
+        return flatten_result(meta, result), True
+    except Exception as exc:
+        logger.error("failed hadm_id=%s: %s", hadm_id, exc)
+        return failed_row(meta, str(exc)), False
+
+
 def checkpoint_columns() -> list[str]:
     columns = ["hadm_id", "pid", *ENDPOINTS, "confidence"]
     columns.extend(["note_id", "resternotomy_reason", "extraction_note"])
@@ -461,27 +487,19 @@ def run(args: argparse.Namespace) -> None:
     ok = 0
     failed = 0
     t0 = time.time()
+    seen_hadms: set[str] = set()
+    max_workers = max(1, args.workers)
+    print(f"workers: {max_workers}")
 
-    for hadm_id, full_text in stream_note_text(args.note_path, target_hadms, note_ids):
-        meta = pd.Series(meta_by_hadm[hadm_id]._asdict())
-        bhc = extract_bhc(full_text, max_chars=args.max_chars)
-        try:
-            result = extract_one(
-                bhc,
-                client,
-                max_retries=args.max_retries,
-                max_tokens=args.max_tokens,
-            )
-            row = flatten_result(meta, result)
-            ok += 1
-        except Exception as exc:
-            logger.error("failed hadm_id=%s: %s", hadm_id, exc)
-            row = failed_row(meta, str(exc))
-            failed += 1
-
+    def consume_future(future: Future[tuple[dict[str, Any], bool]]) -> None:
+        nonlocal processed, ok, failed, batch
+        row, succeeded = future.result()
         processed += 1
+        if succeeded:
+            ok += 1
+        else:
+            failed += 1
         batch.append(row)
-
         if args.dry_run:
             print(json.dumps(row, ensure_ascii=False, indent=2))
         elif len(batch) >= args.batch_size:
@@ -494,10 +512,39 @@ def run(args: argparse.Namespace) -> None:
                 f"{processed}/{len(todo)} ok={ok} failed={failed} "
                 f"rate={processed / elapsed * 60:.1f}/min"
             )
-        if args.delay > 0:
-            time.sleep(args.delay)
 
-    missing = target_hadms - set(str(row["hadm_id"]) for row in batch)
+    in_flight: set[Future[tuple[dict[str, Any], bool]]] = set()
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for hadm_id, full_text in stream_note_text(
+            args.note_path, target_hadms, note_ids
+        ):
+            seen_hadms.add(hadm_id)
+            future = executor.submit(
+                extract_note_row,
+                hadm_id,
+                full_text,
+                meta_by_hadm[hadm_id]._asdict(),
+                client,
+                max_chars=args.max_chars,
+                max_retries=args.max_retries,
+                max_tokens=args.max_tokens,
+            )
+            in_flight.add(future)
+
+            if len(in_flight) >= max_workers * 2:
+                done_futures, in_flight = wait(in_flight, return_when=FIRST_COMPLETED)
+                for done_future in done_futures:
+                    consume_future(done_future)
+
+            if args.delay > 0:
+                time.sleep(args.delay)
+
+        while in_flight:
+            done_futures, in_flight = wait(in_flight, return_when=FIRST_COMPLETED)
+            for done_future in done_futures:
+                consume_future(done_future)
+
+    missing = target_hadms - seen_hadms
     if not args.dry_run:
         if batch:
             write_checkpoint(args.checkpoint, batch)
@@ -532,7 +579,7 @@ def main() -> None:
         "--workers",
         type=int,
         default=1,
-        help="Accepted for CLI compatibility; extraction runs sequentially for CSV checkpoint safety.",
+        help="Concurrent CatChat requests. Main thread still serializes checkpoint writes.",
     )
     args = parser.parse_args()
     run(args)
