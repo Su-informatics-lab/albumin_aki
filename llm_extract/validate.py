@@ -37,7 +37,7 @@ CONCORDANCE_REPORT = RESULTS / "llm_qc_concordance.txt"
 SPOTCHECK_REPORT = RESULTS / "llm_qc_spotcheck.txt"
 
 ICD_LLM_MAP = [
-    ("pneumonia", "pneumonia_vap", "pneumonia"),
+    ("pneumonia / VAP", "pneumonia_vap", "pneumonia_vap"),
     ("sepsis", "sepsis", "sepsis"),
     ("SSI / mediastinitis", "ssi_mediastinitis", "sternal_wound_inf"),
 ]
