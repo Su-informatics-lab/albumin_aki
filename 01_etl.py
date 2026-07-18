@@ -7,7 +7,7 @@ Outputs per database:
   did_all_{db}.csv       — All patients, time-invariant covariates
   did_labs_all_{db}.csv  — All lab/vital measurements with timestamps
   did_cr_all_{db}.csv    — All creatinine measurements with timestamps
-  did_consort.csv        — CONSORT numbers
+  did_consort_{db}.csv   — Ordered aggregate CONSORT flow
 
 Usage:
   python 01_etl.py              # both databases
@@ -177,6 +177,66 @@ def save_all_patients(treated, control, db_tag):
         f"\n  \u2713 did_all_{db_tag.lower()}.csv: {len(all_pts):,} pts ({n_trt} treated + {len(all_pts)-n_trt} control)"
     )
     return all_pts
+
+
+def save_consort(consort, db_tag):
+    """Write one long-form, aggregate-only flow per database."""
+    specs = [
+        ("overall", "all_icu_stays", "total_icu", None),
+        (
+            "overall",
+            "adult_first_cardiac_surgery_stay",
+            "cardiac_adult_first",
+            "total_icu",
+        ),
+        ("overall", "after_eskd_exclusion", "post_eskd", "cardiac_adult_first"),
+        ("treated", "any_accepted_iv_albumin", "treated_any_iv_alb", None),
+        (
+            "treated",
+            "icu_cr_strictly_before_own_t0",
+            "treated_has_cr_pre",
+            "treated_any_iv_alb",
+        ),
+        (
+            "treated",
+            "baseline_after_admit_window_fallback",
+            "treated_has_cr_pre_with_fallback",
+            "treated_any_iv_alb",
+        ),
+        (
+            "treated",
+            "final_after_baseline_cr_lt_4",
+            "treated_final",
+            "treated_has_cr_pre_with_fallback",
+        ),
+        ("control", "never_accepted_iv_albumin", "control_no_iv_alb", None),
+        ("control", "at_least_two_post_icu_cr", "control_has_2cr", "control_no_iv_alb"),
+        (
+            "control",
+            "final_after_reference_cr_lt_4",
+            "control_final",
+            "control_has_2cr",
+        ),
+    ]
+    rows = []
+    for order, (branch, step, key, previous_key) in enumerate(specs, start=1):
+        n = int(consort[key])
+        previous_n = int(consort[previous_key]) if previous_key else None
+        rows.append(
+            {
+                "db": db_tag,
+                "step_order": order,
+                "branch": branch,
+                "step": step,
+                "n": n,
+                "excluded_from_previous": (
+                    previous_n - n if previous_n is not None else np.nan
+                ),
+            }
+        )
+    path = os.path.join(RESULTS, f"did_consort_{db_tag.lower()}.csv")
+    pd.DataFrame(rows).to_csv(path, index=False)
+    print(f"  ✓ did_consort_{db_tag.lower()}.csv: {len(rows)} aggregate rows")
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -455,7 +515,13 @@ def run_eicu():
     cr_pre_t = cr_t[
         (cr_t.labresultoffset >= 0) & (cr_t.labresultoffset < cr_t.alb_offset_min)
     ]
-    has_cr_pre = set(cr_pre_t.patientunitstayid.unique())
+    cr_pre_last = (
+        cr_pre_t.sort_values("labresultoffset")
+        .groupby("patientunitstayid")
+        .last()
+        .reset_index()
+    )
+    has_cr_pre = set(cr_pre_last.patientunitstayid)
     consort["treated_has_cr_pre"] = len(has_cr_pre)
 
     # Hospital admission fallback
@@ -477,9 +543,33 @@ def run_eicu():
     n_rescue = len(rescue_pids & treated_pids)
     consort["treated_hosp_fallback"] = n_rescue
     has_cr_pre |= rescue_pids
+    consort["treated_has_cr_pre_with_fallback"] = len(has_cr_pre & treated_pids)
     print(f"  Cr_pre: ICU={consort['treated_has_cr_pre']}, +fallback={n_rescue}")
 
-    high_cr = set(cr_first[cr_first.labresult >= BASELINE_CR_MAX].patientunitstayid)
+    treated_baseline = pd.concat(
+        [
+            cr_pre_last[["patientunitstayid", "labresult", "labresultoffset"]].assign(
+                baseline_cr_source="icu_last_pre_albumin"
+            ),
+            cr_hosp[cr_hosp.patientunitstayid.isin(rescue_pids)][
+                ["patientunitstayid", "labresult", "labresultoffset"]
+            ].assign(baseline_cr_source="admit_window_fallback"),
+        ],
+        ignore_index=True,
+    ).rename(
+        columns={
+            "labresult": "baseline_cr",
+            "labresultoffset": "baseline_cr_offset_min",
+        }
+    )
+    treated_baseline["baseline_cr_offset_h"] = (
+        treated_baseline.baseline_cr_offset_min / 60.0
+    )
+    high_cr = set(
+        treated_baseline[
+            treated_baseline.baseline_cr >= BASELINE_CR_MAX
+        ].patientunitstayid
+    )
     keep_treated = (has_cr_pre & treated_pids) - high_cr
     consort["treated_final"] = len(keep_treated)
 
@@ -487,10 +577,22 @@ def run_eicu():
     c2 = set(
         cr_ctrl.groupby("patientunitstayid").size().pipe(lambda s: s[s >= 2]).index
     )
+    consort["control_has_2cr"] = len(c2)
+    control_baseline = cr_first[cr_first.patientunitstayid.isin(c2)][
+        ["patientunitstayid", "labresult", "labresultoffset"]
+    ].rename(
+        columns={
+            "labresult": "baseline_cr",
+            "labresultoffset": "baseline_cr_offset_min",
+        }
+    )
+    control_baseline["baseline_cr_offset_h"] = (
+        control_baseline.baseline_cr_offset_min / 60.0
+    )
+    control_baseline["baseline_cr_source"] = "icu_first_reference"
     c_excl = set(
-        cr_first[
-            cr_first.patientunitstayid.isin(c2)
-            & (cr_first.labresult >= BASELINE_CR_MAX)
+        control_baseline[
+            control_baseline.baseline_cr >= BASELINE_CR_MAX
         ].patientunitstayid
     )
     keep_control = c2 - c_excl
@@ -513,13 +615,19 @@ def run_eicu():
     )
     treated = treated.merge(first_peri_alb, on="patientunitstayid", how="left")
     treated = treated.merge(
-        cr_first[["patientunitstayid", "labresult"]].rename(
-            columns={"labresult": "first_cr"}
-        ),
+        treated_baseline[
+            [
+                "patientunitstayid",
+                "baseline_cr",
+                "baseline_cr_offset_h",
+                "baseline_cr_source",
+            ]
+        ],
         on="patientunitstayid",
         how="left",
     )
-    treated["egfr"] = compute_egfr(treated.first_cr, treated.age, treated.is_female)
+    treated["first_cr"] = treated.baseline_cr
+    treated["egfr"] = compute_egfr(treated.baseline_cr, treated.age, treated.is_female)
 
     if "admissionweight" in cardiac.columns and "admissionheight" in cardiac.columns:
         wt = cardiac.set_index("patientunitstayid")["admissionweight"].to_dict()
@@ -587,13 +695,19 @@ def run_eicu():
     control = cardiac[cardiac.patientunitstayid.isin(keep_control)].copy()
     control = control.merge(first_peri_alb, on="patientunitstayid", how="left")
     control = control.merge(
-        cr_first[["patientunitstayid", "labresult"]].rename(
-            columns={"labresult": "first_cr"}
-        ),
+        control_baseline[
+            [
+                "patientunitstayid",
+                "baseline_cr",
+                "baseline_cr_offset_h",
+                "baseline_cr_source",
+            ]
+        ],
         on="patientunitstayid",
         how="left",
     )
-    control["egfr"] = compute_egfr(control.first_cr, control.age, control.is_female)
+    control["first_cr"] = control.baseline_cr
+    control["egfr"] = compute_egfr(control.baseline_cr, control.age, control.is_female)
 
     if "admissionweight" in cardiac.columns:
         control["bmi"] = control.patientunitstayid.apply(
@@ -712,9 +826,7 @@ def run_eicu():
 
     all_ids = keep_treated | keep_control
     cr_exp = cr[
-        cr.patientunitstayid.isin(all_ids)
-        & (cr.labresultoffset >= 0)
-        & (cr.labresult <= CR_POST_PLAUSIBLE_MAX)
+        cr.patientunitstayid.isin(all_ids) & (cr.labresult <= CR_POST_PLAUSIBLE_MAX)
     ][["patientunitstayid", "labresult", "labresultoffset"]].copy()
     cr_exp["offset_h"] = cr_exp.labresultoffset / 60.0
     cr_exp.to_csv(os.path.join(RESULTS, "did_cr_all_eicu.csv"), index=False)
@@ -723,10 +835,10 @@ def run_eicu():
     lab_rows = []
     for lab_name, patterns in {**EICU_LAB_PATTERNS, **EICU_TABLE1_LAB_PATTERNS}.items():
         sub = lab[
-            lab.patientunitstayid.isin(all_ids)
-            & matches_any(lab.labname, patterns)
-            & (lab.labresultoffset >= 0)
+            lab.patientunitstayid.isin(all_ids) & matches_any(lab.labname, patterns)
         ]
+        if lab_name != "albumin":
+            sub = sub[sub.labresultoffset >= 0]
         if len(sub) > 0:
             lab_rows.append(
                 pd.DataFrame(
@@ -766,6 +878,7 @@ def run_eicu():
 
     consort["db"] = "eICU"
     print(f"\n  CONSORT: {consort}")
+    save_consort(consort, "eICU")
     return consort
 
 
@@ -952,9 +1065,11 @@ def run_mimic():
     cr_t = cr[cr.stay_id.isin(treated_stays)].merge(
         first_alb[["stay_id", "alb_offset_h", "alb_offset_min"]], on="stay_id"
     )
-    has_cr = set(
-        cr_t[(cr_t.offset_h >= 0) & (cr_t.offset_min < cr_t.alb_offset_min)].stay_id
+    cr_pre_t = cr_t[(cr_t.offset_h >= 0) & (cr_t.offset_min < cr_t.alb_offset_min)]
+    cr_pre_last = (
+        cr_pre_t.sort_values("offset_h").groupby("stay_id").last().reset_index()
     )
+    has_cr = set(cr_pre_last.stay_id)
     consort["treated_has_cr_pre"] = len(has_cr)
 
     adm_times = admissions[["hadm_id", "admittime"]].copy()
@@ -971,17 +1086,34 @@ def run_mimic():
     rescue = set(hosp_cr.stay_id)
     consort["treated_hosp_fallback"] = len(rescue)
     has_cr |= rescue
+    consort["treated_has_cr_pre_with_fallback"] = len(has_cr)
     print(f"  Cr_pre: ICU={consort['treated_has_cr_pre']}, +fallback={len(rescue)}")
 
-    high_cr = set(cr_first[cr_first.valuenum >= BASELINE_CR_MAX].stay_id)
+    treated_baseline = pd.concat(
+        [
+            cr_pre_last[["stay_id", "valuenum", "offset_h"]].assign(
+                baseline_cr_source="icu_last_pre_albumin"
+            ),
+            hosp_cr[hosp_cr.stay_id.isin(rescue)][
+                ["stay_id", "valuenum", "offset_h"]
+            ].assign(baseline_cr_source="admit_window_fallback"),
+        ],
+        ignore_index=True,
+    ).rename(columns={"valuenum": "baseline_cr", "offset_h": "baseline_cr_offset_h"})
+    high_cr = set(
+        treated_baseline[treated_baseline.baseline_cr >= BASELINE_CR_MAX].stay_id
+    )
     keep_treated = (has_cr & treated_stays) - high_cr
     consort["treated_final"] = len(keep_treated)
     cr_ctrl = cr[(cr.stay_id.isin(control_stays)) & (cr.offset_h >= 0)]
     c2 = set(cr_ctrl.groupby("stay_id").size().pipe(lambda s: s[s >= 2]).index)
+    consort["control_has_2cr"] = len(c2)
+    control_baseline = cr_first[cr_first.stay_id.isin(c2)][
+        ["stay_id", "valuenum", "offset_h"]
+    ].rename(columns={"valuenum": "baseline_cr", "offset_h": "baseline_cr_offset_h"})
+    control_baseline["baseline_cr_source"] = "icu_first_reference"
     c_excl = set(
-        cr_first[
-            cr_first.stay_id.isin(c2) & (cr_first.valuenum >= BASELINE_CR_MAX)
-        ].stay_id
+        control_baseline[control_baseline.baseline_cr >= BASELINE_CR_MAX].stay_id
     )
     keep_control = c2 - c_excl
     consort["control_final"] = len(keep_control)
@@ -1003,11 +1135,14 @@ def run_mimic():
     )
     treated = treated.merge(first_peri_alb, on="stay_id", how="left")
     treated = treated.merge(
-        cr_first[["stay_id", "valuenum"]].rename(columns={"valuenum": "first_cr"}),
+        treated_baseline[
+            ["stay_id", "baseline_cr", "baseline_cr_offset_h", "baseline_cr_source"]
+        ],
         on="stay_id",
         how="left",
     )
-    treated["egfr"] = compute_egfr(treated.first_cr, treated.age, treated.is_female)
+    treated["first_cr"] = treated.baseline_cr
+    treated["egfr"] = compute_egfr(treated.baseline_cr, treated.age, treated.is_female)
 
     for como, code_map in MIMIC_COMORB_ICD.items():
         treated[como] = treated.hadm_id.isin(
@@ -1063,11 +1198,14 @@ def run_mimic():
     control = cardiac[cardiac.stay_id.isin(keep_control)].copy()
     control = control.merge(first_peri_alb, on="stay_id", how="left")
     control = control.merge(
-        cr_first[["stay_id", "valuenum"]].rename(columns={"valuenum": "first_cr"}),
+        control_baseline[
+            ["stay_id", "baseline_cr", "baseline_cr_offset_h", "baseline_cr_source"]
+        ],
         on="stay_id",
         how="left",
     )
-    control["egfr"] = compute_egfr(control.first_cr, control.age, control.is_female)
+    control["first_cr"] = control.baseline_cr
+    control["egfr"] = compute_egfr(control.baseline_cr, control.age, control.is_female)
 
     for como, code_map in MIMIC_COMORB_ICD.items():
         control[como] = control.hadm_id.isin(
@@ -1144,11 +1282,7 @@ def run_mimic():
     save_all_patients(treated, control, "mimic")
 
     all_s = keep_treated | keep_control
-    cr_exp = cr[
-        cr.stay_id.isin(all_s)
-        & (cr.offset_h >= 0)
-        & (cr.valuenum <= CR_POST_PLAUSIBLE_MAX)
-    ]
+    cr_exp = cr[cr.stay_id.isin(all_s) & (cr.valuenum <= CR_POST_PLAUSIBLE_MAX)]
     cr_exp = cr_exp[["stay_id", "valuenum", "offset_min", "offset_h"]].copy()
     cr_exp = cr_exp.rename(
         columns={"valuenum": "labresult", "offset_min": "labresultoffset"}
@@ -1179,7 +1313,8 @@ def run_mimic():
             sub["charttime"] = pd.to_datetime(sub.charttime)
             sub = sub.merge(cardiac[["stay_id", "hadm_id", "intime"]], on="hadm_id")
             sub["offset_h"] = (sub.charttime - sub.intime).dt.total_seconds() / 3600
-            sub = sub[sub.offset_h >= 0]
+            if lab_name != "albumin":
+                sub = sub[sub.offset_h >= 0]
             lab_rows.append(
                 pd.DataFrame(
                     {
@@ -1217,6 +1352,7 @@ def run_mimic():
 
     consort["db"] = "MIMIC"
     print(f"\n  CONSORT: {consort}")
+    save_consort(consort, "MIMIC")
     return consort
 
 
@@ -1229,24 +1365,10 @@ if __name__ == "__main__":
     print("  Outputs: did_all, did_labs_all, did_cr_all per database")
     print("=" * 70)
     args = [a.lower() for a in sys.argv[1:]]
-    consorts = []
     if not args or "eicu" in args:
-        c = run_eicu()
-        if c:
-            consorts.append(c)
+        run_eicu()
     if not args or "mimic" in args:
-        c = run_mimic()
-        if c:
-            consorts.append(c)
-    if consorts:
-        cpath = os.path.join(RESULTS, "did_consort.csv")
-        new_df = pd.DataFrame(consorts)
-        if os.path.exists(cpath):
-            old_df = pd.read_csv(cpath)
-            old_df = old_df[~old_df["db"].isin(set(new_df["db"]))]
-            new_df = pd.concat([old_df, new_df], ignore_index=True)
-        new_df.to_csv(cpath, index=False)
-        print(f"\n  \u2713 did_consort.csv saved")
+        run_mimic()
     print("\n" + "=" * 70)
     print("NEXT: Rscript 02_psm.R eicu / mimic")
     print("=" * 70)

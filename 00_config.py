@@ -28,6 +28,8 @@ MIN_AGE = 18
 CR_MIN, CR_MAX = 0.1, 25.0
 CR_POST_PLAUSIBLE_MAX = 15.0
 BASELINE_CR_MAX = 4.0
+# Phase 3 derives alb_cat strictly before index T0: low < cut, normal >= cut.
+ALB_LOW_CUT = 3.5
 
 # ═══════════════════════════════════════════════════════════════════
 # MIMIC ITEM IDS — LABS
@@ -304,7 +306,10 @@ ALL_PATIENTS_COLS = [
     "surg_valve",
     "surg_combined",
     *EICU_COMORB.keys(),
-    "first_cr",
+    "baseline_cr",
+    "baseline_cr_offset_h",
+    "baseline_cr_source",
+    "first_cr",  # compatibility alias of baseline_cr until the Phase 3 repair
     "egfr",
     *CHRONIC_DRUG_CLASSES.keys(),
     "hosp_mortality",

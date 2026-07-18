@@ -1,8 +1,17 @@
-results/
+# Default-deny generated results; only reviewed aggregate truth is allow-listed.
+results/*
+!results/did_riskset_*.csv
+!results/did_binary_*.csv
+results/did_binary_pairs_*.csv
+!results/egfr_stages_*.csv
+!results/psm_balance_*.csv
+!results/did_hte_*.csv
+!results/did_hte_interact_*.csv
+!results/did_consort_*.csv
 logs/
-*.csv
 *.csv.gz
 __pycache__/
 .DS_Store
 .idea/
 *.pyc
+.Rhistory
