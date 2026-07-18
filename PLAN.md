@@ -74,6 +74,23 @@ file before acting (never from this table alone).
 | External validation | No `iuh/` directory in albumin_aki | Identical engine on an independent site | Build `albumin_aki/iuh/` modeled on `mg/iuh/` (Quartz). |
 | LLM endpoints | `llm_extract/` scaffolded (cardiac_cohort/extract/schema/validate) | — | Run + validate, don't rebuild (per `CODEX_LLM_TASK.md`). |
 
+## 2.1 Additional drift verified by Codex in Phase 0 (2026-07-18)
+
+Codex's Entry 1 audit read the live code and found drift the draft §2 missed. All six were
+supervisor-verified against `02_psm.R` and are accepted. They reshape Phase 3 (see §4).
+
+| # | Verified finding | Fix (phase) |
+|---|---|---|
+| a | `02_psm.R` fits **one global PS with `egfr` + `ckd` as covariates**; no eGFR-stratified matching. | eGFR-stratified matching, `egfr`+`ckd` removed from PS (Phase 3 repair). |
+| b | **Control covariates leak future info**: `extract_labs()` uses each patient's own `alb_offset_h`; never-treated controls get the last lab of the whole stay, past the treated partner's index T0. | Extract control covariates at the **treated partner's index T0** (Phase 3 repair). |
+| c | **Baseline Cr is not canonical**: earliest-Cr (prevalent-AKI), last-pre-T0 Cr (KDIGO), and ETL `first_cr`/eGFR are three different constructs. | One canonical `baseline_cr` + tier + timestamp in ETL; eGFR + prevalent-AKI from it (Phase 1). |
+| d | **Missing post-T0 Cr → `NA` → pair deleted** in `02_psm.R`, but `03_hte.R` codes `0`. Scripts disagree; deletion is the collider bug (failure-modes #2). | Non-event (0) coding in every outcome script (Phase 3 repair; reconcile with `03_hte.R`). |
+| e | **`02_psm.R` promotes in-window RRT to AKI stage 3**, contradicting a Cr-only endpoint. | Resolve at Phase 2 freeze *with Yan* (his primary = "stage 2–3 AKI or new RRT"); keep a Cr-only variant. |
+| f | **`peri_admission_alb` `[-48,+6]` from ICU0 can be post-infusion**; a static `alb_cat` would be contaminated. | Derive `alb_cat` strictly pre-index-T0 in Phase 3; Phase 1 only preserves timestamped inputs + audits coverage. |
+
+Consequence: the "restore `02_psm.R` as primary" row in §2 is only partly right — `02_psm.R` is the
+right *skeleton* but needs the (a)–(f) repairs before its first trusted run.
+
 ---
 
 ## 3. The frozen design (the swap kit, filled in)
@@ -157,6 +174,7 @@ authorizes the next phase. Every gate here corresponds to a mistake that cost re
 - **Deliverable:** frozen `STUDY_DESIGN.md` (versioned, dated); `JOURNAL.md` freeze entry listing every reversed/dropped decision.
 
 ### Phase 3 — PSM + DiD (primary estimator)
+- **Repair first (before any run):** apply the §2.1 fixes to `02_psm.R` — eGFR-stratified matching with `egfr`+`ckd` removed from the PS; control covariates extracted at the treated partner's index T0; the canonical baseline; non-event coding for missing post-T0 outcomes (reconciled with `03_hte.R`); `alb_cat` at index T0. Add tiny static-fixture tests asserting each behavior. Only then run.
 - **Do:** `Rscript 02_psm.R <db>` for mimic + eicu, eGFR-stratified, MICE m=20 averaged, 1:1 with replacement, caliper 0.2, HC1; doubly-robust adjustment for any post-match SMD > 0.1.
 - **Gate:** logistic PS only; match rate ~95%+ per stratum (if it collapses, the control pool is the constraint — do **not** reach for a flexible PS, failure-modes #5); balance table produced; SMD reported only for PS covariates.
 - **Deliverable:** `did_riskset_*`, `did_binary_*`, `did_pairs_primary_yet_untreated_*` (patient-level → HPC only), `psm_balance_*` (aggregate committed).
@@ -213,12 +231,15 @@ first submit rather than trusting the header.
 - `iuh/` — Quartz external validation (model on `mg/iuh/`).
 - SLURM wrappers `run_psm.sh` / `*.sbatch` (add; currently only `run.sh` exists).
 
-**`.gitignore` fix.** Current file ignores all `*.csv`, so nothing is frozen. Change to: ignore
-patient-level (`did_pairs_*`, `did_all_*`, `did_cr_all_*`, `did_labs_all_*`, `_llm_checkpoint.csv`,
-`llm_endpoints_*.csv`) but **force-commit aggregate truth** (`did_riskset_*`, `did_binary_*`,
-`egfr_stages_*`, `psm_balance_*`, `did_hte_*`, `did_hte_interact_*`, `did_consort_*`,
-`llm_qc_*.txt`). PhysioNet DUA forbids committing row-level records; aggregate cell counts are fine
-and are the manuscript's source of truth.
+**`.gitignore` (default-deny).** The current file ignores all `*.csv`, so nothing is frozen. Switch to
+**default-deny**: ignore `results/*` and `logs/`, then unignore only individually reviewed aggregate
+files (`did_riskset_*`, `did_binary_*` [the summary, **not** `did_binary_pairs_*`], `egfr_stages_*`,
+`psm_balance_*`, `did_hte_*`, `did_hte_interact_*`, `did_consort_*`). **Never commit** patient-level or
+PHI-bearing files: `did_pairs_*`, `did_binary_pairs_*`, `matched_pairs_*`, `did_all_*`, `did_cr_all_*`,
+`did_labs_all_*`, `strm_*`, `labs_ext_*`, `cr_variants_*`, `_llm_checkpoint.csv`, `llm_endpoints_*.csv`,
+and `llm_qc_spotcheck.txt` (note excerpts + IDs). Run `git check-ignore -v` on a patient-level example
+before every commit. PhysioNet DUA forbids row-level records; aggregate cell counts are fine and are
+the manuscript's source of truth.
 
 **Branch discipline.** Work directly on `main`; the backup branch `backup/pre-engine-realign-2026-07-18`
 + tag preserve the pre-realignment (v2 landmark) state as the safety net. Commit per phase and push to

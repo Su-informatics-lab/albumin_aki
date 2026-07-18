@@ -133,10 +133,7 @@ canonical copy of each artifact; never edit the same file in two places in one s
 ## 4. Git & results discipline
 
 - **Work directly on `main`.** A safety snapshot of the pre-realignment state exists as branch `backup/pre-engine-realign-2026-07-18` + tag `pre-engine-realign-2026-07-18`; if a phase goes wrong, `git checkout backup/pre-engine-realign-2026-07-18` restores it. Commit per phase; push to `origin/main` with your SSH keys after a gate is approved.
-- Fix `.gitignore` (Phase 1): ignore patient-level (`did_pairs_*`, `did_all_*`, `did_cr_all_*`,
-  `did_labs_all_*`, `_llm_checkpoint.csv`, `llm_endpoints_*.csv`); force-commit aggregate truth
-  (`did_riskset_*`, `did_binary_*`, `egfr_stages_*`, `psm_balance_*`, `did_hte_*`,
-  `did_hte_interact_*`, `did_consort_*`, `llm_qc_*.txt`).
+- Fix `.gitignore` (Phase 1) as **default-deny**: ignore `results/*` + `logs/`, then unignore only reviewed aggregates (`did_riskset_*`, `did_binary_*` [summary, **not** `did_binary_pairs_*`], `egfr_stages_*`, `psm_balance_*`, `did_hte_*`, `did_hte_interact_*`, `did_consort_*`). **Never commit** `did_pairs_*`, `did_binary_pairs_*`, `matched_pairs_*`, `did_all_*`, `did_cr_all_*`, `did_labs_all_*`, `strm_*`, `labs_ext_*`, `cr_variants_*`, `_llm_checkpoint.csv`, `llm_endpoints_*.csv`, or `llm_qc_spotcheck.txt` (note excerpts + IDs). `git check-ignore -v` a patient-level example before every commit.
 - Commit messages name the phase and what changed: `phase3: risk-set PSM mimic+eicu, m=20, match rate 97/96/95%`.
 - Never `git add results/*.csv` blindly — check each is aggregate before committing.
 
@@ -176,6 +173,11 @@ ssh tempest 'cd ~/albumin_aki && git pull && module purge && module load Python/
 - Confirm Yan sign-off is recorded. **STOP.**
 
 ### Phase 3 — PSM + DiD (Tempest)
+**Repair `02_psm.R` before the first run** (per `JOURNAL.md` Entry 1/2 + `PLAN.md §2.1`): eGFR-stratified
+matching with `egfr`+`ckd` removed from the PS; control covariates extracted at the treated partner's
+index T0 (not the whole stay); the canonical baseline; non-event coding for missing post-T0 outcomes
+(reconcile with `03_hte.R`); `alb_cat` at index T0. Add tiny static-fixture tests asserting each, then run.
+
 This repo has only `run.sh`; create `run_psm.sh` first, adapted from `mg/run_psm.sh` (keep
 `#SBATCH --export=NONE`, confirm `--account`/`--partition` with `sinfo`/`sacctmgr`). **Scope the Phase 3
 launcher to `02_psm.R` only** — `03_hte.R` belongs to Phase 4, so the gates stay separable (mg's launcher

@@ -3,6 +3,16 @@
 **Owner:** Codex. **Supervisor:** Claude. **Status:** supervisor-proposed draft — Codex critiques and
 refines this in Phase 0 (`JOURNAL.md` Entry 1) *before* executing anything here.
 
+> **Supervisor-approved revisions (2026-07-18) — `JOURNAL.md` Entry 1 + Entry 2 are authoritative where
+> they differ from this draft.** Accepted: (1) run ETL with **explicit per-DB commands**
+> (`01b_covariates.py` needs `{mimic|eicu}`; `01c_endpoints.py` is MIMIC-only) — the chained T3 command
+> below is superseded. (2) **Default-deny `.gitignore`** excluding `llm_qc_spotcheck.txt` and all
+> `*_pairs_*` (codex.md §4). (3) **`probe_nopost_cr` moves to Phase 3** (needs matched pairs/index T0);
+> Phase 1 runs `probe_alb_ascertainment`, `probe_baseline_anchor`, `probe_alb_cat_coverage` with
+> pass/fail assertions. (4) **No static `alb_cat`** — preserve timestamped albumin+Cr; derive at index
+> T0 in Phase 3. (5) **Canonical baseline** emitted in ETL (last pre-exposure Cr + tier + timestamp;
+> never post-CPB; eGFR from it). (6) `alb_cat` cut = **3.5 g/dL** default (Yan to confirm).
+
 This expands `PLAN.md §4 → Phase 1`. Goal: analysis-ready per-patient tables with a defensible
 pre-exposure baseline and audited first-albumin ascertainment, plus the repo hygiene that lets the
 engine run reproducibly. The primary/sensitivity *ordering* is not needed for Phase 1 ETL (the cohort

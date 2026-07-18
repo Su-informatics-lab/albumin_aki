@@ -484,3 +484,51 @@ Phase 1 raw-data probe. Stopped at: Phase 0 gate. Do not edit ETL or run Tempest
 supervisor appends `APPROVED: Phase 1`.
 
 >>> STOP. Awaiting supervisor approval for Phase 1. <<<
+
+---
+
+## Entry 2 — Supervisor review of Phase 0 + APPROVED: Phase 1  (2026-07-18, Claude)
+
+**Verdict: Phase 0 accepted in full. This is an excellent, rigorous audit.** I independently
+re-read `02_psm.R` and confirmed all four "critical drift" findings against the live code — they are
+real, not speculative:
+- **Future control-lab leakage** — `extract_labs()` (L84–101) filters to each patient's *own* `alb_offset_h`; for never-treated controls that is `NA`, so it takes the **last lab of the whole stay** (`descending=TRUE`), i.e. values after the treated partner's index T0. Confirmed.
+- **No eGFR-stratified matching** — one global PS with `egfr` **and** `ckd` as covariates (L30–33); risk sets never split by eGFR (L262–267). Confirmed.
+- **Non-canonical baseline Cr** — `first_aki_h` uses earliest Cr (L253); KDIGO binary uses last-pre-T0 Cr via `find_cr_pre` (L336); ETL `first_cr`/eGFR is a third construct. Confirmed.
+- **Missing-post-Cr deleted, not coded 0** — `compute_kdigo()` returns `NA` (L317) → pair dropped (L361), while `03_hte.R` returns `0`. The two scripts disagree. Confirmed (failure-modes #2).
+
+I also accept the two catches on my own plan: the `.gitignore` whitelist would have committed
+`llm_qc_spotcheck.txt` (PHI: note excerpts + IDs), and Phase 3 as written wrongly assumed `02_psm.R`
+already satisfied the design. Both corrected below.
+
+### Decisions
+
+- **Yan sign-off (blocking Phase 2, NOT Phase 1).** Routed to Haining — this is a human-collaborator approval I cannot give. Phase 1 (ETL/probes/hygiene) is design-neutral and proceeds now. Dr. Yan must approve "risk-set primary + ICU0/24h landmark sensitivity" before the Phase 2 freeze.
+- **Positive control.** Accept Codex's A+B framing. **Locked as a direction:** albumin increases perioperative bleeding/resternotomy (ALBICS, Pesonen JAMA 2022;328:251–258). The magnitude (~OR 1.8; Codex-cited RR 1.73 bleeding, 1.85 resternotomy, 1.45 infection) is a **soft directional benchmark, not an equivalence pass/fail** — and the exact RR/CI must be confirmed against the primary JAMA table before any manuscript use (a supervisor web check confirmed the direction across multiple sources but not the exact figures). **Action:** also pull **ALBICS-AKI** (postoperative 20% albumin → AKI RCT, JAMA Surgery) — it is far more exposure-matched (postoperative albumin, AKI endpoint) and may be the better positive/negative anchor for our primary AKI finding. eICU = direction only.
+- **`alb_cat` cut + timing.** Approve **3.5 g/dL** (`low <3.5`, `normal >=3.5`) as the working default, and **strict pre-index derivation** (most recent qualifying albumin strictly before each treated/candidate-control index T0 — never static `peri_admission_alb` from ICU0 `[-48,+6]`, which can be post-infusion). The cut (3.5 vs 3.0) is flagged for Yan's clinical confirmation but is **non-blocking for Phase 1** (alb_cat is built at Phase 3, not Phase 1). Strict pre-index timing is canon and is locked now.
+
+### Phase 1 conditions (supervisor locks)
+
+1. **Canonical creatinine anchor.** Emit exactly one `baseline_cr` per patient = last pre-exposure Cr in the correct preoperative/pre-first-albumin window, with a documented fallback tier (admit-window) and its timestamp + source tier. **Never promote a post-CPB value to "preoperative."** Derive eGFR and the prevalent-AKI-at-T0 screen from that same anchor. Preserve timestamped Cr so Phase 3 can compute index-time baselines per match.
+2. **Default-deny `.gitignore`:** ignore `results/*`, unignore only individually reviewed aggregate files. Never commit `llm_qc_spotcheck.txt`, `did_binary_pairs_*`, `matched_pairs_*`, cohort/checkpoint/LLM-endpoint files. `check-ignore` before every commit.
+3. **Per-database CONSORT** (long-form, ordered steps + exclusion deltas), not one wide file.
+4. **No static `alb_cat` in ETL.** Preserve raw timestamped albumin + Cr; derive `alb_cat(index_t0)` in Phase 3.
+5. **`probe_nopost_cr` moves to Phase 3** (needs matched pairs + control index T0). Phase 1 runs `probe_alb_ascertainment`, `probe_baseline_anchor`, `probe_alb_cat_coverage` with explicit pass/fail assertions (`qc_probe.py` is descriptive only).
+6. Use Codex's explicit per-DB commands (01b requires `{mimic|eicu}`; 01c is MIMIC-only). No file edit or Tempest job beyond these probes/ETL; STOP on any surprising count rather than auto-patching.
+
+### Accepted structural change (folded into PLAN.md + codex.md)
+
+**Phase 3 now explicitly includes code repair + static tests BEFORE the first primary run:** index-time
+covariate extraction for controls; eGFR-stratified matching with `egfr` + `ckd` removed from the PS;
+canonical baseline; non-event coding for missing post-T0 outcomes (reconciled with `03_hte.R`);
+`alb_cat` at index T0. **RRT-in-outcome** (current code promotes in-window RRT to AKI stage 3) is
+resolved at the Phase 2 freeze *with Yan* — his protocol primary is "KDIGO stage 2–3 AKI **or** new
+RRT," so RRT-in-outcome may be intentional; keep a creatinine-only variant as a labeled sensitivity.
+
+Docs updated this session: `PLAN.md` §2 (verified drift rows) + §4 Phase 3 (repair step) + §6
+(default-deny gitignore); `PHASE1.md` (supervisor-approved revisions); `codex.md` (gitignore + Phase 3 repair).
+
+**APPROVED: Phase 1.** Proceed with Entry 1's P1.1–P1.6 (authoritative where it differs from the
+PHASE1.md draft). Stop at the Phase 1 gate and post Entry 3.
+
+>>> APPROVED: Phase 1. Proceed. <<<
