@@ -41,6 +41,24 @@ COVARIATE_SETS <- list(
   )
 )
 
+MAIN_PS_SET <- "S2"
+
+main_ps_vars <- function(db, variant) {
+  db <- tolower(db)
+  variant <- tolower(variant)
+  if (!(db %in% c("mimic", "eicu"))) stop("Unknown database: ", db)
+  if (!(variant %in% c("pooled", "egfr"))) stop("Unknown variant: ", variant)
+  # Entry 12: eICU retains ventilation but excludes vaso/MAP because their
+  # hospital-level missingness is informative.
+  vars <- if (db == "mimic") {
+    COVARIATE_SETS[[MAIN_PS_SET]]
+  } else {
+    c(PS_BASE, "vent_at_t0")
+  }
+  if (variant == "egfr") vars <- setdiff(vars, c("egfr", "ckd"))
+  vars
+}
+
 last_value_before_index <- function(stream, index, value_col = "value",
                                     lab_name = NULL) {
   if (is.null(stream) || nrow(stream) == 0) {

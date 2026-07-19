@@ -44,7 +44,10 @@ cat(sprintf("\n03_hte.R | %s | pooled pairs=%d\n", db, n_pairs))
 outcomes <- c(
   "aki1_48h", "aki2_48h", "aki3_48h",
   "aki1_7d", "aki2_7d", "aki3_7d",
-  "aki2_rrt_48h", "aki2_rrt_7d", "hosp_mort"
+  "aki2_rrt_48h", "aki2_rrt_7d",
+  "death_48h_all", "death_48h_never", "death_48h_censored",
+  "death_7d_all", "death_7d_never", "death_7d_censored",
+  "hosp_mort_descriptive"
 )
 modifier <- data.frame(
   egfr = all_pts$egfr[trt_rows],
@@ -78,7 +81,7 @@ for (subgroup in names(subgroups)) {
   idx <- which(!is.na(subgroups[[subgroup]]) & subgroups[[subgroup]])
   if (length(idx) < 30) next
   for (outcome in outcomes) {
-    estimate <- pair_binary_or(
+    estimate <- pair_or_rd(
       pairs[[paste0(outcome, "_trt")]][idx],
       pairs[[paste0(outcome, "_ctl")]][idx]
     )

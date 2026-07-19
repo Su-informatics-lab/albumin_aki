@@ -29,34 +29,24 @@ if (!file.exists(file.path(script_dir, "R", "causal_helpers.R"))) {
   script_dir <- getwd()
 }
 source(file.path(script_dir, "R", "causal_helpers.R"))
+source(file.path(script_dir, "R", "covariate_registry.R"))
 
-PS_BASE <- c(
-  "age", "is_female", "bmi",
-  "surg_cabg", "surg_valve", "surg_combined",
-  "heart_failure", "hypertension", "diabetes", "ckd",
-  "copd", "pvd", "stroke", "liver_disease", "egfr"
-)
-PS_VARS_POOLED <- c(
-  PS_BASE, "last_calcium", "last_lactate", "last_lactate_missing",
-  "last_heartrate", "last_hemoglobin", "alb_cat"
-)
-PS_VARS_EGFR <- setdiff(PS_VARS_POOLED, c("egfr", "ckd"))
-LAB_BASES <- c("albumin", "calcium", "lactate", "heartrate", "hemoglobin")
+safe_read <- function(name) {
+  path <- file.path(RESULTS, name)
+  if (!file.exists(path)) stop("Required main-experiment input missing: ", path)
+  read.csv(path, stringsAsFactors = FALSE)
+}
 
-extract_static_last <- function(labs, all_pts) {
-  for (lab in LAB_BASES) {
-    sub <- labs[labs$lab_name == lab & labs$offset_h >= 0, , drop = FALSE]
-    sub$own_t0 <- all_pts$alb_offset_h[match(sub$pid, all_pts$pid)]
-    sub <- sub[is.na(sub$own_t0) | sub$offset_h < sub$own_t0, , drop = FALSE]
-    if (nrow(sub) == 0) {
-      all_pts[[paste0("last_", lab)]] <- NA_real_
-      next
-    }
-    sub <- sub[order(sub$pid, -sub$offset_h, -sub$value), , drop = FALSE]
-    sub <- sub[!duplicated(sub$pid), , drop = FALSE]
-    all_pts[[paste0("last_", lab)]] <- sub$value[
-      match(all_pts$pid, sub$pid)
-    ]
+build_main_covariates <- function(all_pts, labs, tag) {
+  index_h <- ifelse(
+    !is.na(all_pts$alb_offset_h),
+    all_pts$alb_offset_h,
+    all_pts$cr_ref_early_offset_h
+  )
+  index <- data.frame(pid = all_pts$pid, index_h = index_h)
+  for (lab in c("albumin", "lactate", "heartrate", "hemoglobin")) {
+    values <- last_value_before_index(labs, index, lab_name = lab)
+    all_pts[[paste0("last_", lab)]] <- values[as.character(all_pts$pid)]
   }
   all_pts$last_lactate_missing <- as.integer(is.na(all_pts$last_lactate))
   all_pts$alb_cat <- factor(
@@ -66,6 +56,29 @@ extract_static_last <- function(labs, all_pts) {
     ),
     levels = c("normal", "low", "missing")
   )
+  if (tag == "mimic") {
+    vent <- safe_read("strm_vent_mimic.csv")
+    vaso <- safe_read("strm_vaso_mimic.csv")
+    map_stream <- safe_read("strm_map_mimic.csv")
+    all_pts$vent_at_t0 <- state_at_index(vent, index)[as.character(all_pts$pid)]
+    all_pts$vaso_at_t0 <- state_at_index(vaso, index)[as.character(all_pts$pid)]
+    map_values <- last_value_before_index(
+      transform(map_stream, value = map), index, value_col = "value"
+    )
+    all_pts$map_before_t0 <- map_values[as.character(all_pts$pid)]
+  } else {
+    # eICU's available ventilation covariate is the APACHE day-1 flag. Entry
+    # 12 explicitly excludes eICU vaso/MAP but retains this ventilation proxy.
+    vent <- safe_read("vent_eicu.csv")
+    vent_value <- pmax(
+      as.integer(vent$vent_day1 == 1), as.integer(vent$intub_day1 == 1),
+      na.rm = TRUE
+    )
+    vent_value[!is.finite(vent_value)] <- 0L
+    vent_map <- tapply(vent_value, vent$pid, max, na.rm = TRUE)
+    all_pts$vent_at_t0 <- as.integer(vent_map[as.character(all_pts$pid)])
+    all_pts$vent_at_t0[is.na(all_pts$vent_at_t0)] <- 0L
+  }
   all_pts
 }
 
@@ -133,6 +146,7 @@ smd_one <- function(x1, x0) {
 
 make_pair_outcomes <- function(pairs, all_pts, cr_list) {
   rrt_map <- setNames(all_pts$rrt_offset_h, as.character(all_pts$pid))
+  death_map <- setNames(all_pts$death_offset_h, as.character(all_pts$pid))
   mort_map <- setNames(all_pts$hosp_mortality, as.character(all_pts$pid))
   alb_map <- setNames(all_pts$alb_offset_h, as.character(all_pts$pid))
   rows <- vector("list", nrow(pairs))
@@ -164,28 +178,45 @@ make_pair_outcomes <- function(pairs, all_pts, cr_list) {
       row[[paste0(nm, "_trt")]] <- ot[nm]
       row[[paste0(nm, "_ctl")]] <- oc[nm]
     }
-    row$hosp_mort_trt <- as.integer(mort_map[tp] == 1)
-    row$hosp_mort_ctl <- as.integer(mort_map[cp] == 1)
+    for (horizon in c(48, 168)) {
+      suffix <- if (horizon == 48) "48h" else "7d"
+      dt <- fixed_window_death(death_map[tp], t0, horizon)
+      dc <- fixed_window_death(death_map[cp], t0, horizon)
+      row[[paste0("death_", suffix, "_all_trt")]] <- dt
+      row[[paste0("death_", suffix, "_all_ctl")]] <- dc
+      never <- is.na(calb)
+      row[[paste0("death_", suffix, "_never_trt")]] <- if (never) dt else NA
+      row[[paste0("death_", suffix, "_never_ctl")]] <- if (never) dc else NA
+      crossed <- !is.na(calb) && calb > t0 && calb <= t0 + horizon
+      row[[paste0("death_", suffix, "_censored_trt")]] <-
+        if (crossed) NA else dt
+      row[[paste0("death_", suffix, "_censored_ctl")]] <-
+        if (crossed) NA else dc
+    }
+    row$hosp_mort_descriptive_trt <- as.integer(mort_map[tp] == 1)
+    row$hosp_mort_descriptive_ctl <- as.integer(mort_map[cp] == 1)
     rows[[i]] <- row
   }
   do.call(rbind, rows)
 }
 
 cat(sprintf("\n02_psm.R | %s | %s | frozen main experiment\n", db, variant))
-all_pts <- read.csv(file.path(RESULTS, sprintf("did_all_%s.csv", tag)),
-                    stringsAsFactors = FALSE)
-cr_all <- read.csv(file.path(RESULTS, sprintf("did_cr_all_%s.csv", tag)),
-                   stringsAsFactors = FALSE)
-labs <- read.csv(file.path(RESULTS, sprintf("did_labs_all_%s.csv", tag)),
-                 stringsAsFactors = FALSE)
+all_pts <- safe_read(sprintf("did_all_%s.csv", tag))
+cr_all <- safe_read(sprintf("did_cr_all_%s.csv", tag))
+labs <- safe_read(sprintf("did_labs_all_%s.csv", tag))
 cr_id <- if ("patientunitstayid" %in% names(cr_all)) "patientunitstayid" else "stay_id"
 lab_id <- if ("patientunitstayid" %in% names(labs)) "patientunitstayid" else "stay_id"
 cr_all$pid <- cr_all[[cr_id]]
 labs$pid <- labs[[lab_id]]
 cr_all <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
 cr_list <- split(cr_all[, c("labresult", "offset_h")], cr_all$pid)
-all_pts <- extract_static_last(labs, all_pts)
+all_pts <- build_main_covariates(all_pts, labs, tag)
 all_pts$egfr_stratum <- egfr_stratum(all_pts$egfr)
+ps_spec <- main_ps_vars(tag, variant)
+cat(sprintf(
+  "  frozen PS set: S2; db-specific variables (%d): %s\n",
+  length(ps_spec), paste(ps_spec, collapse = ", ")
+))
 rm(labs)
 gc()
 
@@ -217,8 +248,9 @@ for (stratum in strata_to_run) {
   in_stratum <- if (stratum == "Overall") rep(TRUE, nrow(all_pts)) else
     eligible_same_stratum(all_pts$egfr_stratum, stratum)
   trt_idx <- treated_ok[in_stratum[treated_ok]]
-  ps_vars <- usable_ps_vars(all_pts[in_stratum, , drop = FALSE],
-                            if (variant == "pooled") PS_VARS_POOLED else PS_VARS_EGFR)
+  ps_vars <- usable_ps_vars(
+    all_pts[in_stratum, , drop = FALSE], ps_spec
+  )
   ps_out <- average_ps(all_pts[in_stratum, , drop = FALSE], ps_vars)
   all_pts$ps <- NA_real_
   all_pts$ps[in_stratum] <- ps_out$ps
@@ -294,20 +326,23 @@ for (stratum in strata_to_run) {
   outcomes <- c(
     "aki1_48h", "aki2_48h", "aki3_48h",
     "aki1_7d", "aki2_7d", "aki3_7d",
-    "aki2_rrt_48h", "aki2_rrt_7d", "hosp_mort"
+    "aki2_rrt_48h", "aki2_rrt_7d",
+    "death_48h_all", "death_48h_never", "death_48h_censored",
+    "death_7d_all", "death_7d_never", "death_7d_censored",
+    "hosp_mort_descriptive"
   )
   binary <- list()
   for (outcome in outcomes) {
     y_t <- pair_outcomes[[paste0(outcome, "_trt")]]
     y_c <- pair_outcomes[[paste0(outcome, "_ctl")]]
-    methods <- c("psm", if (length(violations)) "psm_dr")
+    methods <- c("psm", if (length(violations)) "dr")
     for (method in methods) {
       adj_t <- adj_c <- NULL
-      if (method == "psm_dr") {
+      if (method == "dr") {
         adj_t <- all_pts[pairs$trt_idx, violations, drop = FALSE]
         adj_c <- all_pts[pairs$ctl_idx, violations, drop = FALSE]
       }
-      estimate <- pair_binary_or(y_t, y_c, adj_t, adj_c)
+      estimate <- pair_or_rd(y_t, y_c, adj_t, adj_c)
       binary[[length(binary) + 1L]] <- cbind(
         data.frame(db = db, variant = variant, stratum = stratum,
                    outcome = outcome, method = method),

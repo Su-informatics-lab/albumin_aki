@@ -58,6 +58,18 @@ stopifnot(
   ) %in% unlist(COVARIATE_SETS)),
   !any(grepl("post|outcome|death|rrt|intraop", unlist(COVARIATE_SETS)))
 )
+stopifnot(
+  identical(MAIN_PS_SET, "S2"),
+  identical(main_ps_vars("mimic", "pooled"), COVARIATE_SETS$S2),
+  identical(
+    main_ps_vars("mimic", "egfr"),
+    setdiff(COVARIATE_SETS$S2, c("egfr", "ckd"))
+  ),
+  identical(main_ps_vars("eicu", "pooled"), c(PS_BASE, "vent_at_t0")),
+  !any(c("vaso_at_t0", "map_before_t0") %in%
+         main_ps_vars("eicu", "pooled")),
+  !any(c("egfr", "ckd") %in% main_ps_vars("eicu", "egfr"))
+)
 
 death <- fixed_window_death(c(NA, 12, 70, 200), rep(10, 4), 48)
 stopifnot(identical(death, c(0L, 1L, 0L, 0L)))
@@ -78,6 +90,7 @@ if (requireNamespace("sandwich", quietly = TRUE) &&
 
 cat(
   "PASS: non-event coding, two-reference baseline/tie rule, ",
-  "within-stratum matching, fixed mortality, OR/RD utility\n",
+  "within-stratum matching, frozen S2 database contract, ",
+  "fixed mortality, OR/RD utility\n",
   sep = ""
 )
