@@ -2370,3 +2370,153 @@ report the WHOLE sweep (all candidates, both scales, raw+q), never a cherry-pick
 This also directly tests whether the KDIGO≥2 non-monotonicity (Entry 18b) is explained by a second modifier.
 
 >>> Recorded: pre-specified, FDR-controlled HTE modifier sweep + competing-modifier (eGFR vs M) + bivariate CATE + optional causal forest. Run with the Entry 18b probes; report Entry 19; STOP. Full transparent reporting. <<<
+
+---
+
+## Entry 19 — HTE sweep integrity gate: completed run, guard-rail STOP before interpretation  (2026-07-19, Codex)
+
+### Gate status
+
+The pre-specified MIMIC sweep ran to completion on the frozen v3.3 pooled
+matched pairs without re-matching or changing the PS (`d260ae6`; Tempest job
+`4262533`, exit 0, 3:46, peak RSS 560 MB). The static fixture passed on
+Tempest. Step 1 contains exactly 24 pre-specified tests (18 candidates plus the
+six nonlinear quartile representations) for each of four outcomes = 96 tests,
+with no missing OR- or RD-scale global P values. BH correction was applied
+separately within each outcome and effect scale across all 24 tests. Every
+term, CI, raw P, q value, and sparse-cell count was emitted; nothing was
+filtered from the remote aggregate tables.
+
+**This is a guard-rail STOP, not the final inferential Entry 19.** The integrity
+probe found two implementation issues that must be resolved before the
+aggregate result CSVs are accepted or committed:
+
+1. **P-F did not preserve the frozen crossover censor.** The primary matched
+   outcomes have 4,690 complete pairs at 48h and 4,202 at 7d. The current P-F
+   reconstruction used all 5,428 pairs: exactly +738 at 48h and +1,226 at 7d,
+   the horizons' crossover-censored pairs. These P-F estimates are invalid as
+   a like-for-like KDIGO-definition sensitivity and are not interpreted below.
+2. **The exploratory forest's random pair folds are not patient-disjoint.**
+   The 5,428 pairs use only 2,269 unique controls; 1,127 controls are reused,
+   the maximum reuse is 23, and 238 patients appear in both treated and control
+   roles. Thus a repeated patient outcome can occur in training and validation.
+   The very small provisional omnibus P values cannot be treated as an honest
+   out-of-fold heterogeneity test until folds are patient-disjoint (or the
+   omnibus test is demoted).
+
+The aggregate-only probe is `probe_hte_integrity.R` (`62426f7`) and its remote
+output is `results/hte_probe_integrity_mimic.csv`. Patient-level data remain on
+Tempest. The provisional sweep outputs remain remote and uncommitted so that
+an invalid P-F/forest result does not become a canonical number.
+
+### Provisional Step-1 completeness table
+
+Each primary-outcome cell below is
+`OR raw P / q ; RD raw P / q`. `min events` is the minimum arm-by-modifier-cell
+event count across the two primary horizons. No primary row is sparse by the
+pre-specified `<20` rule. These are provisional until the integrity gate is
+resolved, but the Step-1 regressions themselves do not depend on P-F or the
+forest.
+
+| Candidate / form | KDIGO>=1 48h | KDIGO>=1 7d | Min events |
+|---|---:|---:|---:|
+| eGFR, linear | 8.9e-38 / 2.1e-36; 5.4e-48 / 1.3e-46 | 5.3e-28 / 1.3e-26; 1.3e-33 / 3.1e-32 | 263 |
+| baseline Cr, linear | 1.1e-17 / 3.4e-17; 1.9e-23 / 6.6e-23 | 6.8e-12 / 1.6e-11; 1.3e-14 / 3.1e-14 | 190 |
+| age, linear | 6.7e-28 / 4.0e-27; 1.6e-33 / 9.7e-33 | 3.3e-24 / 2.6e-23; 9.7e-29 / 7.7e-28 | 248 |
+| hemoglobin, linear | 1.4e-18 / 4.8e-18; 6.2e-22 / 1.9e-21 | 9.9e-20 / 3.4e-19; 8.9e-23 / 3.1e-22 | 212 |
+| lactate, linear | .392 / .409; .221 / .241 | .237 / .271; .155 / .177 | 245 |
+| MAP, linear | .049 / .062; .034 / .043 | .044 / .053; .038 / .046 | 270 |
+| eGFR, quartile | 3.9e-32 / 4.7e-31; 1.1e-38 / 9.2e-38 | 1.6e-23 / 9.3e-23; 1.9e-27 / 1.1e-26 | 263 |
+| baseline Cr, quartile | 8.7e-24 / 3.5e-23; 1.0e-29 / 4.0e-29 | 4.0e-22 / 1.6e-21; 3.9e-26 / 1.6e-25 | 190 |
+| age, quartile | 2.7e-24 / 1.3e-23; 7.8e-30 / 3.7e-29 | 3.5e-22 / 1.6e-21; 1.2e-26 / 5.6e-26 | 248 |
+| hemoglobin, quartile | 5.8e-16 / 1.5e-15; 4.6e-19 / 1.2e-18 | 2.3e-17 / 6.8e-17; 4.6e-20 / 1.4e-19 | 212 |
+| lactate, quartile | .376 / .409; .354 / .369 | .855 / .855; .789 / .789 | 245 |
+| MAP, quartile | .020 / .028; .012 / .017 | .011 / .015; .009 / .012 | 270 |
+| `alb_cat` | .031 / .042; .021 / .028 | .040 / .050; .029 / .036 | 101 |
+| heart failure | 3.5e-08 / 7.6e-08; 3.6e-09 / 8.0e-09 | 3.3e-09 / 7.3e-09; 3.7e-10 / 8.0e-10 | 296 |
+| diabetes | 4.6e-06 / 8.4e-06; 3.7e-07 / 6.9e-07 | 2.3e-04 / 3.6e-04; 5.3e-05 / 8.4e-05 | 391 |
+| hypertension | 6.6e-07 / 1.3e-06; 4.1e-08 / 8.3e-08 | 7.9e-06 / 1.6e-05; 1.6e-06 / 3.3e-06 | 266 |
+| CKD history | 3.2e-30 / 2.6e-29; 2.4e-39 / 2.8e-38 | 8.7e-26 / 1.0e-24; 3.4e-32 / 4.1e-31 | 171 |
+| CABG | .014 / .021; .007 / .011 | .007 / .010; .005 / .007 | 253 |
+| valve | .287 / .328; .202 / .230 | .597 / .623; .470 / .496 | 165 |
+| combined | 5.0e-05 / 8.5e-05; 1.2e-05 / 2.1e-05 | 1.0e-05 / 1.7e-05; 3.0e-06 / 5.1e-06 | 74 |
+| aortic | .850 / .850; .731 / .731 | .547 / .597; .475 / .496 | 104 |
+| vasopressor at T0 | .193 / .232; .155 / .186 | .001 / .002; 9.0e-04 / .001 | 520 |
+| ventilation at T0 | 2.9e-10 / 7.1e-10; 1.2e-12 / 2.8e-12 | 4.0e-14 / 1.1e-13; 2.4e-16 / 6.4e-16 | 481 |
+| sex | 1.8e-04 / 2.8e-04; 4.5e-05 / 7.1e-05 | 8.6e-06 / 1.6e-05; 2.0e-06 / 3.6e-06 | 370 |
+
+The full secondary >=2 table and all coefficient-level estimates/CIs are in
+the uncommitted remote aggregates. At >=2, three of 24 Step-1 cells are flagged
+as sparse; the output retains and marks them rather than hiding them.
+
+### Provisional Step-2 / mechanism / probe read
+
+- **Competing modifiers:** the mandatory eGFR x `alb_cat` three-way tests did
+  not survive correction at either primary horizon on either scale
+  (q=.26-.51), while eGFR remained extremely strong in the joint model
+  (OR interaction 0.425 at 48h and 0.476 at 7d; RD interaction -19.0 and
+  -17.2 pp per +30 eGFR). Baseline Cr was the only consistent three-way
+  partner on both scales/horizons (all q<=5.4e-16), but eGFR also remained
+  strong when both interactions entered (OR 0.244/0.256; RD -29.9/-30.7 pp).
+  This is mathematical/clinical collinearity, not evidence that eGFR simply
+  collapses as a proxy. Hypertension and sex produced some scale/horizon
+  three-way signals, not a consistent both-scale/both-horizon pattern.
+- **Bivariate grids:** all 432 pre-specified eGFR-by-M cells were emitted;
+  137 are grey-flagged `<20` and must not be interpreted.
+- **Exploratory forest:** provisional importance ranked eGFR first, age
+  second, and baseline Cr third at both primary horizons. The provisional PDP
+  was directionally monotone for eGFR through roughly 98, with a small
+  high-eGFR upturn. The omnibus P values are withheld because the fold-leakage
+  probe invalidated their out-of-fold interpretation.
+- **Treated-only mechanism:** 25% versus 5% first product was null. Approximate
+  dose was positively associated with AKI (per 25 g: >=1 OR 1.13/1.14 and RD
+  +2.8/+3.0 pp at 48h/7d; >=2 OR 1.24/1.24 and RD +2.0/+2.7 pp), without a
+  consistent dose-by-eGFR interaction. This is within-treated associational
+  evidence only; grams use first-product concentration times total 24h volume,
+  so mixed-product courses may be misclassified.
+- **P-A:** among 4,097 never-treated-control pairs, mortality was null at 48h
+  (RD +0.024 pp, P=.86) and 7d (+0.098 pp, P=.66), while the AKI gradient
+  survived (>=1 eGFR interaction OR 0.415/0.464; RD -19.4/-17.7 pp).
+- **P-B:** death-before-AKI was rare (15 vs 10 at 48h; 21 vs 34 at 7d).
+  AKI-or-death and death-censored-pair results were essentially unchanged:
+  >=1 RD about +10.2 pp at 48h and +10.8-11.0 pp at 7d; eGFR interaction OR
+  0.415-0.417 and 0.464-0.466, respectively.
+- **P-C:** all-control 48h deaths were 31 treated-arm versus 19 control-arm.
+  Never-treated pairs contributed 17 versus 16 and were null; later-treated
+  groups contributed 14 versus 3. This confirms that the all-versus-never
+  mortality divergence is concentrated in the crossover-selected groups, but
+  the groups are conditioning-defined and are not themselves causal contrasts.
+- **P-E:** the complete arm x eGFR x stage distribution was emitted (64 rows);
+  interpretation is deferred with the invalid P-F companion.
+
+### Honest provisional synthesis
+
+No final modifier is declared at this stop. Many single-modifier tests survive
+FDR because several baseline severity/reserve variables track the same strong
+gradient; “q<.05” alone is not sufficient. The most coherent pattern so far is
+eGFR/renal reserve, age, baseline Cr, and hemoglobin, with eGFR ranked first by
+the exploratory forest. `alb_cat` is weak and does not alter the eGFR axis.
+Baseline Cr is the only strong eGFR partner in the three-way models, but the
+eGFR interaction survives jointly rather than collapsing. Whether that
+two-variable surface explains the >=2 non-monotonicity cannot be finalized
+until the frozen-censor P-F repair is approved and rerun. The mortality caveat
+is strongly consistent with crossover/selection: never-treated mortality is
+null and competing deaths do not attenuate the AKI gradient. Every result
+remains hypothesis-generating pending eICU directional and IUH replication.
+
+### Decision needed
+
+Approve only these integrity repairs, with no re-match or PS/covariate change:
+
+1. apply the same horizon-specific later-treatment censor used by the frozen
+   primary outcomes to P-F, then rerun P-F; and
+2. replace random forest folds with patient-disjoint folds (connected
+   components over treated/control patient IDs if feasible). If the matching
+   graph has a giant component that makes honest cross-fitting infeasible,
+   demote the forest to descriptive variable importance/PDP and report no
+   omnibus P value.
+
+After approval, rerun only the affected P-F/forest pieces, commit all reviewed
+aggregate CSVs, complete the final Entry 19 interpretation, and STOP again.
+
+>>> GUARD-RAIL STOP. Do not interpret or commit the provisional P-F/forest outputs until the two integrity repairs are approved. <<<
