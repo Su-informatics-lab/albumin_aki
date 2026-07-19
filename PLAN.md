@@ -27,7 +27,7 @@ Four decisions were made before this plan was written; they are binding until re
 
 ## 1. The crux: why "pure engine primary" is feasible (the T0 clarification)
 
-The current repo (`STUDY_DESIGN.md` v2, `02_psm_v2.R`) abandoned the risk-set design in favor
+The pre-realignment repo (`STUDY_DESIGN.md` v2, now preserved as `02b_landmark_sensitivity.R`) abandoned the risk-set design in favor
 of a fixed ICU0 + 24h-landmark design. `yan_protocol_gap_analysis.md` records the stated reason:
 Dr. Yan judged that a **serum-albumin-lab-anchored T0** is operationally infeasible because only
 **7.9% (MIMIC) / ~32% (eICU)** of treated patients have a qualifying albumin lab *before* infusion,
@@ -60,7 +60,7 @@ file before acting (never from this table alone).
 
 | Area | Current repo state | Engine canon | Action |
 |---|---|---|---|
-| Primary estimator | `02_psm.R` risk-set exists **and** `02_psm_v2.R` landmark fork exists; v2 was the presented "primary" | One canonical primary; sensitivities named for what they compute | **Restore `02_psm.R` as primary. Rename `02_psm_v2.R` → `02b_landmark_sensitivity.R`.** No `_v2` forks. |
+| Primary estimator | Risk-set primary and ambiguously named landmark fork coexisted; the landmark was presented as "primary" | One canonical primary; sensitivities named for what they compute | **`02_psm.R` is primary; `02b_landmark_sensitivity.R` is explicitly deferred.** No `_v2` forks. |
 | T0 | v2: ICU0 for everyone | First exposure (first albumin) | Primary = first-albumin T0 (already in `02_psm.R`). Landmark T0=ICU0 lives only in the sensitivity script. |
 | Matching | v2: 1:1 **without** replacement | 1:1 **with** replacement, caliper 0.2 SD, HC1 SE | Primary uses with-replacement (already in `02_psm.R`). Fix the sensitivity script to match, or document the difference. |
 | Imputation | v2 presented at **m=5** | MICE PMM **m=20** averaged | All reported runs at m=20. m=5 only for smoke tests, never reported. |
@@ -176,7 +176,7 @@ authorizes the next phase. Every gate here corresponds to a mistake that cost re
 - **Deliverable:** `did_all_*`, `did_cr_all_*`, `did_labs_all_*`, `did_consort_*` (aggregate committed); QC probe output in `JOURNAL.md`.
 
 ### Phase 2 — Lock & freeze the design
-- **Do:** Rewrite `STUDY_DESIGN.md` to the pure-engine design (risk-set primary, landmark sensitivity); rename `02_psm_v2.R` → `02b_landmark_sensitivity.R`; run `grill-my-research` against every fuzzy definition.
+- **Do:** Freeze `STUDY_DESIGN.md` to the pure-engine design (risk-set primary, landmark sensitivity) and keep the landmark isolated as `02b_landmark_sensitivity.R`.
 - **Gate:** control pool = yet-untreated; `alb_cat` coarse (not continuous, not dropped); eGFR is a stratifier removed from PS; comorbidities strictly pre-ICU; downstream variables excluded; `set.seed(2026)` before MICE; **Yan sign-off on primary/sensitivity ordering received.**
 - **Deliverable:** frozen `STUDY_DESIGN.md` (versioned, dated); `JOURNAL.md` freeze entry listing every reversed/dropped decision.
 
@@ -230,7 +230,7 @@ first submit rather than trusting the header.
 - `00_config.py` — constants (add `alb_cat` cut).
 - `01_etl.py`, `01b_covariates.py`, `01c_endpoints.py` — cohort + covariates + structured endpoints.
 - `02_psm.R` — **primary** risk-set PSM + DiD.
-- `02b_landmark_sensitivity.R` — the demoted ICU0 landmark analysis (renamed from `02_psm_v2.R`).
+- `02b_landmark_sensitivity.R` — the demoted ICU0 landmark analysis.
 - `03_hte.R` — eGFR-stratified HTE + interaction tests.
 - `04_figures.py`, `gen_table1.py`, CONSORT — reporting (model on `mg/`).
 - `10_nlp.py` + `llm_extract/` — LLM endpoints.

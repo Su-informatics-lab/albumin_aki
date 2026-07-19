@@ -18,6 +18,9 @@ Rscript 03_hte.R eicu
 python 04_figures.py     # publication figures
 ```
 
+The deferred ICU-admission 24-hour landmark sensitivity is isolated in
+`02b_landmark_sensitivity.R`; it is not part of the main experiment.
+
 ## Data
 
 Requires credentialed PhysioNet access:

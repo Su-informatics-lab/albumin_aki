@@ -62,7 +62,7 @@ manufacture a modifier.
 eICU); outcome = KDIGO creatinine AKI; modifier = eGFR strata; falsification = mortality (expect null);
 positive control = ALBICS bleeding/support direction (confirm magnitude at Phase 0).
 
-**Demotions:** the ICU0 24h-landmark design (`02_psm_v2.R`) becomes a **sensitivity** analysis,
+**Demotions:** the ICU0 24h-landmark design (`02b_landmark_sensitivity.R`) is a **sensitivity** analysis,
 renamed `02b_landmark_sensitivity.R`. It is co-reported, not discarded.
 
 ---
@@ -123,7 +123,7 @@ canonical copy of each artifact; never edit the same file in two places in one s
   canonical and reconcile the other to it exactly (same missing-outcome coding, same windows). mg_aki's
   binary block in `02_psm.R` was reconciled to the staging script so both report identical ORs on the
   same pairs. Ambiguity about "which number is right" is a bug.
-- **No half-renames.** When you rename `02_psm_v2.R` → `02b_landmark_sensitivity.R`, update the script,
+- **No half-renames.** The landmark script is `02b_landmark_sensitivity.R`; keep the script,
   its output filenames, `run.sh`/SLURM wrappers, `STUDY_DESIGN.md`, `README.md`, and any probe
   docstring in one commit.
 - **Freeze discipline.** At Phase 2, `STUDY_DESIGN.md` gets a version + date and a list of every
@@ -150,7 +150,7 @@ its header before running** — do not trust the commands below verbatim if the 
 
 ### Phase 0 — Frame, critique & plan (NO file changes, NO jobs yet)
 This is a planning gate. Do not edit a single file or launch a single job in Phase 0.
-- **Invoke the `icu-causal-engine` skill** and read `PLAN.md`, `LESSONS.md`, this file, `PHASE1.md`, and the key repo files (`00_config.py`, `01_etl.py`, `02_psm.R`, `02_psm_v2.R`, `03_hte.R`, `STUDY_DESIGN.md`, `yan_protocol_gap_analysis.md`, `CODEX_LLM_TASK.md`).
+- **Invoke the `icu-causal-engine` skill** and read `PLAN.md`, `LESSONS.md`, this file, `PHASE1.md`, and the key repo files (`00_config.py`, `01_etl.py`, `02_psm.R`, `02b_landmark_sensitivity.R`, `03_hte.R`, `STUDY_DESIGN.md`, `yan_protocol_gap_analysis.md`, `CODEX_LLM_TASK.md`).
 - **Validate the drift inventory** (`PLAN.md §2`) against the live repo, file by file; correct any row that is wrong and say so.
 - **Critique the plan.** Using the engine skill, list every disagreement, risk, or improvement you see in `PLAN.md` / `PHASE1.md`. You are *expected* to push back where the engine or the data suggest a better path — this is wanted, not optional. Silence is not a plan.
 - **Propose your Phase 1 execution plan** — concrete steps, exact commands, the probes you will write, and the acceptance checks — refining `PHASE1.md`.
@@ -170,7 +170,7 @@ ssh tempest 'cd ~/albumin_aki && git pull && module purge && module load Python/
 
 ### Phase 2 — Lock & freeze
 - Rewrite `STUDY_DESIGN.md` to the pure-engine design; version + date it; list every reversed decision.
-- Rename `02_psm_v2.R` → `02b_landmark_sensitivity.R` (full no-half-rename sweep).
+- Confirm the landmark sensitivity is isolated as `02b_landmark_sensitivity.R` (full no-half-rename sweep).
 - Run `grill-my-research` against the design; resolve or log each challenge.
 - Confirm Yan sign-off is recorded. **STOP.**
 

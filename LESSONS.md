@@ -53,8 +53,8 @@ Two scripts computing the "same" OR differently is a bug that wastes a reviewer 
 non-canonical one to the canonical one exactly. When a method changes, rename the script **and** its
 outputs **and** every downstream reference in the **same commit**. A half-rename is worse than none.
 
-**albumin_aki.** The repo currently has **`02_psm.R` and `02_psm_v2.R`** side by side — the exact
-anti-pattern. Fix: `02_psm.R` is the canonical primary (risk-set); `02_psm_v2.R` becomes
+**albumin_aki.** The repo once had the canonical and landmark scripts side by side under ambiguous
+names — the exact anti-pattern. Fix: `02_psm.R` is the canonical primary (risk-set); the landmark script becomes
 `02b_landmark_sensitivity.R` (a different analysis, named for what it computes), with a full sweep of
 `run.sh`, SLURM wrappers, `STUDY_DESIGN.md`, and `README.md` in one commit.
 

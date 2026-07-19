@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # ============================================================================
-# 02_psm_v2.R — 24h Landmark PSM for Albumin -> CSA-AKI (v2)
+# 02b_landmark_sensitivity.R — 24h Landmark PSM sensitivity
 #
 # Design:  T0 = ICU0 for all patients
 #          Exposure: any IV albumin within ICU0 to ICU0+24h
@@ -13,8 +13,8 @@
 # Covariates: shared model (~30 var) from did_all + strm_* + labs_ext + surg
 # Matching:   1:1 nearest-neighbor caliper=0.2*SD, MICE m=20
 #
-# Usage: Rscript 02_psm_v2.R mimic
-#        Rscript 02_psm_v2.R eicu
+# Usage: Rscript 02b_landmark_sensitivity.R mimic
+#        Rscript 02b_landmark_sensitivity.R eicu
 # ============================================================================
 suppressPackageStartupMessages({
   library(sandwich); library(lmtest); library(mice)
@@ -28,11 +28,11 @@ CR_WINDOW  <- 12
 
 args <- commandArgs(trailingOnly = TRUE)
 tag  <- tolower(args[1])
-if (!tag %in% c("mimic","eicu")) stop("Usage: Rscript 02_psm_v2.R {mimic|eicu} [mice_m]")
+if (!tag %in% c("mimic","eicu")) stop("Usage: Rscript 02b_landmark_sensitivity.R {mimic|eicu} [mice_m]")
 db   <- toupper(tag)
-# Optional: override MICE m (e.g., Rscript 02_psm_v2.R mimic 5 for quick test)
+# Optional smoke-test override; reported analyses remain m=20.
 if (length(args) >= 2) M_IMP <- as.integer(args[2])
-cat(sprintf("\n  02_psm_v2 [%s]\n", db))
+cat(sprintf("\n  02b_landmark_sensitivity [%s]\n", db))
 
 safe_read <- function(name) {
   p <- file.path(RESULTS, name)

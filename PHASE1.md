@@ -20,7 +20,7 @@ tables serve both designs), so **Phase 1 can run before Yan's sign-off**; that s
 Phase 2 freeze, not the ETL.
 
 ## Scope boundary (do NOT do these in Phase 1)
-- Do **not** rename `02_psm_v2.R` yet (that is the Phase 2 freeze action, tied to the Yan sign-off).
+- The landmark script rename is a Phase 2 freeze action, not a Phase 1 ETL action.
 - Do **not** freeze `STUDY_DESIGN.md` (Phase 2).
 - Do **not** run PSM/HTE (Phases 3–4).
 - Do **not** add `alb_cat` to the PS model spec yet — Phase 1 only *builds and audits* the column; it enters the frozen PS at Phase 2.

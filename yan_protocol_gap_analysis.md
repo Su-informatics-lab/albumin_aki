@@ -13,7 +13,7 @@
 | **T0** = first postop serum Alb lab before any albumin infusion | **T0 = ICU0** (ICU admission). Probe showed only 7.9% (MIMIC) / 32% (eICU) of treated had a qualifying Alb lab before infusion — operationally infeasible as anchor. Yan approved the change: "术后输白蛋白的首要原因不是为了纠正低白蛋白". | ✅ Changed, Yan approved |
 | T0 window candidates: 0-6h / 0-12h / 0-24h | T0 fixed at ICU0. Exposure window = (0, ICU0+24h]. Sensitivity: restrict to infusion ≤6h / ≤12h subsets. | ✅ Simplified |
 | **Exposure** = any albumin infusion between T0 and ICU0+24h | First IV albumin infusion ∈ (0, ICU0+24h]. Infusion >24h = late/rescue, excluded from primary. MIMIC 85.4% / eICU 73.3% eligible. | ✅ |
-| **Landmark** = ICU0+24h; AKI counted from 24h onward | ICU0+24h landmark. Exclude: death ≤24h, RRT ≤24h, stage≥2 AKI ≤24h. Cost: <1% per filter. | ✅ To implement in 02_psm_v2.R |
+| **Landmark** = ICU0+24h; AKI counted from 24h onward | ICU0+24h landmark. Exclude: death ≤24h, RRT ≤24h, stage≥2 AKI ≤24h. Cost: <1% per filter. | Deferred sensitivity in `02b_landmark_sensitivity.R` |
 | **Primary estimand**: early albumin strategy (ITT-like at 24h) | Risk-set PSM + DiD (retained as mechanistic support) + **landmark binary** (new primary per Yan). | ✅ To implement |
 
 ---

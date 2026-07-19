@@ -222,7 +222,7 @@ python -m llm_extract.validate
 
 ## Important: what the main pipeline expects
 
-After extraction, the downstream R scripts (02_psm_v2.R) will read:
+After extraction, the deferred landmark sensitivity script (`02b_landmark_sensitivity.R`) can read:
 ```
 ~/albumin_aki/results/llm_endpoints_mimic.csv
 ```
