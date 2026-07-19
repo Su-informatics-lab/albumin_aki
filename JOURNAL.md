@@ -1245,3 +1245,45 @@ exclusions, then run S0-S5 MIMIC pooled and return the full OR/RD sweep table. N
 covariate ordering, estimator, or frozen outcome rule needs to change.
 
 >>> GUARD-RAIL STOP. Awaiting approval of the mechanical Cr-list alignment repair; no sweep result is available. <<<
+
+---
+
+## Entry 10 — Supervisor: approve Cr-fix; m=5 sweep; clinical covariate ordering  (2026-07-18, Claude)
+
+Correct stop; correct diagnosis. **APPROVE the `split()` alignment repair** (build `cr_list` values and
+grouping key from the same sorted object; `-labresult` in the sort encodes the max-at-tie rule).
+Verification gate before sweeping: **require 5,428 eligible / 343 prevalent-AKI exclusions** (the reviewed
+canonical numbers) — do not run the sweep until the probe reproduces them.
+
+**Compute: sweep at MICE m=5; the FINAL frozen run of the selected set at m=20.** m=5 is fine for
+comparing covariate sets (exploration); m=20 only for the locked result.
+
+### Covariate ordering — by confounding relevance to albumin→(AKI, death), not by Yan's list
+
+The spurious protective mortality is confounding-by-indication: post-cardiac-surgery albumin is a
+**volume/resuscitation** decision, so it is given to the hemodynamically unstable, bleeding, or
+hypoperfused — the same patients who die and develop AKI. So the sweep must lead with the
+**resuscitation-severity axis**, which is what should de-confound mortality. Re-order the registry
+(cumulative/nested, strictly pre-T0):
+
+- **S0 — base mg set** (locked): age, sex, BMI; surgery type (CABG/valve/combined); comorbidities (HF, HTN, DM, COPD, PVD, stroke, liver); lactate + lactate_missing; heart rate; `alb_cat`; hemoglobin; (eGFR in the pooled PS).
+- **S1 — + `vaso_at_t0`** (single strongest indication + mortality confounder; isolate it so we can see if it alone moves the falsification). MIMIC.
+- **S2 — + `MAP_before_t0`, `vent_at_t0`** (complete the hemodynamic / organ-support axis). MIMIC (eICU: vent only).
+- **S3 — + `platelet`, `INR`, `hematocrit`, `bicarbonate`, `BUN`, `sodium`** (coagulopathy/bleeding + acid–base + renal chemistry).
+- **S4 — + `rbc_before_t0`, `crystalloid_before_t0`, `urine_before_t0`** (pre-T0 resuscitation intensity / early oliguria; MIMIC; **must be strictly pre-T0** — flag any interpretive risk of near-path adjustment).
+- **S5 — + `surg_aortic`, `prior_cardiac_surgery`** (surgical complexity / redo).
+- **S6 (optional) — + `WBC`, `loop_diuretic`, `acei_arb`, `nsaid`, `ppi`** (low-value refinements).
+
+**Deliberately excluded** (do not add): SOFA/APACHE-24h (post-T0 when T0<24h), serum `calcium` (albumin
+binds calcium → downstream; mg dropped it), continuous peri-albumin (it is `alb_cat`), `adm_emergency`
+(Yan himself flagged it is admission route, not surgical urgency), intraoperative vars + LVEF (unavailable).
+
+Selection criterion is unchanged (Entry 8b): pick the frozen set by **falsification reaching ~null
+(OR *and* RD) + best balance**, NOT by the AKI effect. Read sparse outcomes (death, stage-3) primarily by
+**RD**; a large OR on a tiny RD is a note, not an alarm. Report the full S0→S6 sweep as a transparency panel.
+
+**Instruction:** apply the Cr-fix → pass the 5,428/343 verification probe → re-order the registry as above
+→ run S0–S5 (S6 optional) MIMIC pooled at m=5 → return the full OR/RD sweep table (Entry 11) and STOP.
+Then we freeze the selected set (re-run at m=20) and I release stratified + eICU + HTE.
+
+>>> APPROVED: Cr-fix + verification gate + m=5 sweep + clinical covariate order. Run S0–S5 MIMIC pooled, STOP with the sweep table. <<<
