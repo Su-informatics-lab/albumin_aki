@@ -41,22 +41,70 @@ COVARIATE_SETS <- list(
   )
 )
 
-MAIN_PS_SET <- "S2"
+MAIN_PS_SET <- "S2_PLUS_AORTIC"
 
-main_ps_vars <- function(db, variant) {
+main_ps_vars <- function(db, variant, analysis_set = "primary") {
   db <- tolower(db)
   variant <- tolower(variant)
+  analysis_set <- tolower(analysis_set)
   if (!(db %in% c("mimic", "eicu"))) stop("Unknown database: ", db)
   if (!(variant %in% c("pooled", "egfr"))) stop("Unknown variant: ", variant)
-  # Entry 12: eICU retains ventilation but excludes vaso/MAP because their
-  # hospital-level missingness is informative.
-  vars <- if (db == "mimic") {
-    COVARIATE_SETS[[MAIN_PS_SET]]
+  if (!(analysis_set %in% c("primary", "s2_no_aortic"))) {
+    stop("Unknown analysis set: ", analysis_set)
+  }
+  # v3.3: MIMIC primary is S2 + aortic. eICU is supplementary and omits
+  # vaso/MAP (informative missingness) and the post-T0-contaminated APACHE
+  # day-1 ventilation proxy.
+  vars <- if (db == "mimic" && analysis_set == "primary") {
+    c(COVARIATE_SETS$S2, "surg_aortic")
+  } else if (db == "mimic") {
+    COVARIATE_SETS$S2
+  } else if (analysis_set == "primary") {
+    c(PS_BASE, "surg_aortic")
   } else {
-    c(PS_BASE, "vent_at_t0")
+    PS_BASE
   }
   if (variant == "egfr") vars <- setdiff(vars, c("egfr", "ckd"))
   vars
+}
+
+covariate_display_label <- function(variable) {
+  labels <- c(
+    age = "age",
+    is_female = "sex",
+    bmi = "BMI",
+    surg_cabg = "CABG surgery",
+    surg_valve = "valve surgery",
+    surg_combined = "combined surgery",
+    surg_aortic = "aortic surgery",
+    heart_failure = "heart failure",
+    hypertension = "hypertension",
+    diabetes = "diabetes",
+    copd = "COPD",
+    pvd = "peripheral vascular disease",
+    stroke = "stroke",
+    liver_disease = "liver disease",
+    egfr = "baseline (at ICU T0): eGFR",
+    last_lactate = "baseline (at ICU T0): lactate",
+    last_lactate_missing = "baseline (at ICU T0): lactate missing",
+    last_heartrate = "baseline (at ICU T0): heart rate",
+    last_hemoglobin = "baseline (at ICU T0): hemoglobin",
+    alb_cat = "baseline (at ICU T0): serum albumin category",
+    vaso_at_t0 = "baseline (at ICU T0): vasopressor status",
+    map_before_t0 = "baseline (at ICU T0): MAP",
+    vent_at_t0 = "baseline (at ICU T0): ventilation status"
+  )
+  out <- unname(labels[variable])
+  out[is.na(out)] <- variable[is.na(out)]
+  out
+}
+
+result_suffix <- function(variant, tag, analysis_set = "primary") {
+  if (analysis_set == "primary") {
+    sprintf("%s_%s", variant, tag)
+  } else {
+    sprintf("%s_%s_%s", variant, analysis_set, tag)
+  }
 }
 
 last_value_before_index <- function(stream, index, value_col = "value",

@@ -23,11 +23,18 @@ case $step in
     Rscript 02_psm.R mimic egfr   2>&1 | tee logs/02_psm_mimic_egfr.log
     Rscript 02_psm.R eicu pooled  2>&1 | tee logs/02_psm_eicu_pooled.log
     Rscript 02_psm.R eicu egfr    2>&1 | tee logs/02_psm_eicu_egfr.log
+    Rscript 02_psm.R mimic pooled s2_no_aortic \
+      2>&1 | tee logs/02_psm_mimic_pooled_s2_no_aortic.log
     ;;
 3)
     log "3" "HTE (03_hte.R)"
     Rscript 03_hte.R mimic 2>&1 | tee logs/03_hte_mimic.log
     Rscript 03_hte.R eicu  2>&1 | tee logs/03_hte_eicu.log
+    Rscript probe_nopost_cr.R mimic pooled
+    Rscript probe_nopost_cr.R mimic egfr
+    Rscript probe_nopost_cr.R eicu pooled
+    Rscript probe_nopost_cr.R eicu egfr
+    Rscript probe_eicu_underadjustment.R
     ;;
 *)  echo "Unknown step: $step (valid: 1-3)" ;;
 esac

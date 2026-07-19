@@ -15,14 +15,24 @@ Rscript 02_psm.R mimic pooled  # pooled risk-set PSM
 Rscript 02_psm.R mimic egfr    # match within G1/G2/G3+
 Rscript 02_psm.R eicu pooled
 Rscript 02_psm.R eicu egfr
+Rscript 02_psm.R mimic pooled s2_no_aortic  # prespecified balance sensitivity
 Rscript 03_hte.R mimic   # formal eGFR interaction + subgroups
 Rscript 03_hte.R eicu
 Rscript probe_nopost_cr.R mimic pooled
 Rscript probe_nopost_cr.R mimic egfr
 Rscript probe_nopost_cr.R eicu pooled
 Rscript probe_nopost_cr.R eicu egfr
+Rscript probe_eicu_underadjustment.R
 python 04_figures.py     # publication figures
 ```
+
+The frozen v3.3 timing convention is **baseline (at ICU T0)**: measured
+labs/vitals are the most recent qualifying value strictly before T0
+(`offset_h < index_h`), while ongoing organ supports are status at T0. This is
+a display convention only; same-timestamp measurements are not included with
+`<=`. MIMIC is the primary database. eICU is supplementary and its propensity
+score omits vasopressor/MAP (informative missingness) and ventilation (the
+available APACHE day-1 proxy can post-date T0).
 
 The deferred ICU-admission 24-hour landmark sensitivity is isolated in
 `02b_landmark_sensitivity.R`; it is not part of the main experiment.

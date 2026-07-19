@@ -59,16 +59,57 @@ stopifnot(
   !any(grepl("post|outcome|death|rrt|intraop", unlist(COVARIATE_SETS)))
 )
 stopifnot(
-  identical(MAIN_PS_SET, "S2"),
-  identical(main_ps_vars("mimic", "pooled"), COVARIATE_SETS$S2),
+  identical(MAIN_PS_SET, "S2_PLUS_AORTIC"),
+  length(main_ps_vars("mimic", "pooled")) == 23,
+  identical(
+    main_ps_vars("mimic", "pooled"),
+    c(COVARIATE_SETS$S2, "surg_aortic")
+  ),
   identical(
     main_ps_vars("mimic", "egfr"),
-    setdiff(COVARIATE_SETS$S2, c("egfr", "ckd"))
+    setdiff(c(COVARIATE_SETS$S2, "surg_aortic"), c("egfr", "ckd"))
   ),
-  identical(main_ps_vars("eicu", "pooled"), c(PS_BASE, "vent_at_t0")),
-  !any(c("vaso_at_t0", "map_before_t0") %in%
+  identical(main_ps_vars("eicu", "pooled"), c(PS_BASE, "surg_aortic")),
+  !any(c("vaso_at_t0", "map_before_t0", "vent_at_t0") %in%
          main_ps_vars("eicu", "pooled")),
-  !any(c("egfr", "ckd") %in% main_ps_vars("eicu", "egfr"))
+  !any(c("egfr", "ckd") %in% main_ps_vars("eicu", "egfr")),
+  identical(
+    main_ps_vars("mimic", "pooled", "s2_no_aortic"),
+    COVARIATE_SETS$S2
+  ),
+  identical(
+    main_ps_vars("eicu", "pooled", "s2_no_aortic"),
+    PS_BASE
+  ),
+  identical(result_suffix("pooled", "mimic"), "pooled_mimic"),
+  identical(
+    result_suffix("pooled", "mimic", "s2_no_aortic"),
+    "pooled_s2_no_aortic_mimic"
+  )
+)
+
+# The baseline-at-T0 display unification is label-only: internal variables and
+# their strict-before selector remain unchanged, while exported labels have one
+# explicit convention and no mixed last_ / *_before_t0 / *_at_t0 wording.
+timing_fixture <- data.frame(
+  pid = c(1, 1, 2),
+  lab_name = "hemoglobin",
+  value = c(10, 20, 12),
+  offset_h = c(4, 5, 4)
+)
+timing_index <- data.frame(pid = c(1, 2), index_h = c(5, 5))
+timing_value <- last_value_before_index(
+  timing_fixture, timing_index, lab_name = "hemoglobin"
+)
+stopifnot(timing_value["1"] == 10, timing_value["2"] == 12)
+timing_codes <- c(
+  "last_lactate", "last_heartrate", "last_hemoglobin", "alb_cat",
+  "vaso_at_t0", "map_before_t0", "vent_at_t0"
+)
+timing_labels <- covariate_display_label(timing_codes)
+stopifnot(
+  all(grepl("^baseline \\(at ICU T0\\):", timing_labels)),
+  !any(grepl("last_|_before_t0|_at_t0|@T0", timing_labels))
 )
 
 death <- fixed_window_death(c(NA, 12, 70, 200), rep(10, 4), 48)
@@ -90,7 +131,7 @@ if (requireNamespace("sandwich", quietly = TRUE) &&
 
 cat(
   "PASS: non-event coding, two-reference baseline/tie rule, ",
-  "within-stratum matching, frozen S2 database contract, ",
-  "fixed mortality, OR/RD utility\n",
+  "within-stratum matching, frozen v3.3 S2+aortic database contract, ",
+  "strict-before value-preserving labels, fixed mortality, OR/RD utility\n",
   sep = ""
 )

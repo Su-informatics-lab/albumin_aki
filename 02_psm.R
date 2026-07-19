@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # Canonical frozen risk-set PSM for albumin and cardiac-surgery AKI.
-# Usage: Rscript 02_psm.R {mimic|eicu} {pooled|egfr}
+# Usage: Rscript 02_psm.R {mimic|eicu} {pooled|egfr} [primary|s2_no_aortic]
 
 suppressPackageStartupMessages({
   library(sandwich)
@@ -15,13 +15,23 @@ PRIMARY_H <- 24
 SEED <- 2026
 
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) != 2 || !(tolower(args[1]) %in% c("mimic", "eicu")) ||
-    !(tolower(args[2]) %in% c("pooled", "egfr"))) {
-  stop("Usage: Rscript 02_psm.R {mimic|eicu} {pooled|egfr}")
+if (!(length(args) %in% c(2, 3)) ||
+    !(tolower(args[1]) %in% c("mimic", "eicu")) ||
+    !(tolower(args[2]) %in% c("pooled", "egfr")) ||
+    (length(args) == 3 &&
+       !(tolower(args[3]) %in% c("primary", "s2_no_aortic")))) {
+  stop(
+    "Usage: Rscript 02_psm.R {mimic|eicu} {pooled|egfr} ",
+    "[primary|s2_no_aortic]"
+  )
 }
 tag <- tolower(args[1])
 db <- toupper(tag)
 variant <- tolower(args[2])
+analysis_set <- if (length(args) == 3) tolower(args[3]) else "primary"
+if (analysis_set != "primary" && (tag != "mimic" || variant != "pooled")) {
+  stop("The frozen S2-without-aortic sensitivity is MIMIC pooled only")
+}
 file_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 file_arg <- sub("^--file=", "", file_arg[1])
 script_dir <- dirname(normalizePath(file_arg))
@@ -56,6 +66,14 @@ build_main_covariates <- function(all_pts, labs, tag) {
     ),
     levels = c("normal", "low", "missing")
   )
+  surg <- safe_read(sprintf("surg_%s.csv", tag))
+  if (!("pid" %in% names(surg))) {
+    stop("Surgery covariate file has no pid column")
+  }
+  all_pts$surg_aortic <- as.integer(
+    surg$surg_aortic[match(all_pts$pid, surg$pid)]
+  )
+  all_pts$surg_aortic[is.na(all_pts$surg_aortic)] <- 0L
   if (tag == "mimic") {
     vent <- safe_read("strm_vent_mimic.csv")
     vaso <- safe_read("strm_vaso_mimic.csv")
@@ -66,18 +84,6 @@ build_main_covariates <- function(all_pts, labs, tag) {
       transform(map_stream, value = map), index, value_col = "value"
     )
     all_pts$map_before_t0 <- map_values[as.character(all_pts$pid)]
-  } else {
-    # eICU's available ventilation covariate is the APACHE day-1 flag. Entry
-    # 12 explicitly excludes eICU vaso/MAP but retains this ventilation proxy.
-    vent <- safe_read("vent_eicu.csv")
-    vent_value <- pmax(
-      as.integer(vent$vent_day1 == 1), as.integer(vent$intub_day1 == 1),
-      na.rm = TRUE
-    )
-    vent_value[!is.finite(vent_value)] <- 0L
-    vent_map <- tapply(vent_value, vent$pid, max, na.rm = TRUE)
-    all_pts$vent_at_t0 <- as.integer(vent_map[as.character(all_pts$pid)])
-    all_pts$vent_at_t0[is.na(all_pts$vent_at_t0)] <- 0L
   }
   all_pts
 }
@@ -200,7 +206,10 @@ make_pair_outcomes <- function(pairs, all_pts, cr_list) {
   do.call(rbind, rows)
 }
 
-cat(sprintf("\n02_psm.R | %s | %s | frozen main experiment\n", db, variant))
+cat(sprintf(
+  "\n02_psm.R | %s | %s | %s | frozen v3.3 main experiment\n",
+  db, variant, analysis_set
+))
 all_pts <- safe_read(sprintf("did_all_%s.csv", tag))
 cr_all <- safe_read(sprintf("did_cr_all_%s.csv", tag))
 labs <- safe_read(sprintf("did_labs_all_%s.csv", tag))
@@ -212,9 +221,10 @@ cr_all <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
 cr_list <- split(cr_all[, c("labresult", "offset_h")], cr_all$pid)
 all_pts <- build_main_covariates(all_pts, labs, tag)
 all_pts$egfr_stratum <- egfr_stratum(all_pts$egfr)
-ps_spec <- main_ps_vars(tag, variant)
+ps_spec <- main_ps_vars(tag, variant, analysis_set)
 cat(sprintf(
-  "  frozen PS set: S2; db-specific variables (%d): %s\n",
+  "  frozen PS set: %s; db-specific variables (%d): %s\n",
+  if (analysis_set == "primary") "S2 + surg_aortic" else "S2 without aortic",
   length(ps_spec), paste(ps_spec, collapse = ", ")
 ))
 rm(labs)
@@ -314,9 +324,22 @@ for (stratum in strata_to_run) {
   smds <- vapply(ps_vars, function(v) {
     smd_one(all_pts[[v]][pairs$trt_idx], all_pts[[v]][pairs$ctl_idx])
   }, numeric(1))
+  raw_ctl_idx <- which(in_stratum & all_pts$treated == 0)
+  raw_smds <- vapply(ps_vars, function(v) {
+    smd_one(all_pts[[v]][trt_idx], all_pts[[v]][raw_ctl_idx])
+  }, numeric(1))
   balance <- data.frame(
-    db = db, variant = variant, stratum = stratum,
-    variable = names(smds), smd = as.numeric(smds)
+    db = db,
+    database_role = if (tag == "mimic") "primary" else "supplementary",
+    analysis_set = analysis_set,
+    variant = variant,
+    stratum = stratum,
+    variable_code = names(smds),
+    variable = covariate_display_label(names(smds)),
+    raw_smd = as.numeric(raw_smds),
+    smd = as.numeric(smds),
+    raw_comparison = "eligible ever-treated vs never-treated source cohort",
+    stringsAsFactors = FALSE
   )
   violations <- names(smds[smds > 0.10])
   cat(sprintf("    balance max=%.3f; violations=%d\n", max(smds),
@@ -344,15 +367,27 @@ for (stratum in strata_to_run) {
       }
       estimate <- pair_or_rd(y_t, y_c, adj_t, adj_c)
       binary[[length(binary) + 1L]] <- cbind(
-        data.frame(db = db, variant = variant, stratum = stratum,
-                   outcome = outcome, method = method),
+        data.frame(
+          db = db,
+          database_role = if (tag == "mimic") "primary" else "supplementary",
+          analysis_set = analysis_set,
+          variant = variant,
+          stratum = stratum,
+          outcome = outcome,
+          method = method
+        ),
         estimate
       )
     }
   }
   binary <- do.call(rbind, binary)
   all_match[[length(all_match) + 1L]] <- data.frame(
-    db = db, variant = variant, stratum = stratum,
+    db = db,
+    database_role = if (tag == "mimic") "primary" else "supplementary",
+    analysis_set = analysis_set,
+    variant = variant,
+    stratum = stratum,
+    ps_covariates = length(ps_vars),
     treated_eligible = length(trt_idx), matched = n_match,
     match_rate = match_rate, caliper = caliper,
     max_smd = max(smds), n_viol = length(violations)
@@ -369,18 +404,22 @@ match_summary <- do.call(rbind, all_match)
 balance_all <- do.call(rbind, all_balance)
 binary_all <- do.call(rbind, all_binary)
 pairs_all <- do.call(rbind, all_pair_outcomes)
+suffix <- result_suffix(variant, tag, analysis_set)
 write.csv(match_summary,
-          file.path(RESULTS, sprintf("did_riskset_%s_%s.csv", variant, tag)),
+          file.path(RESULTS, sprintf("did_riskset_%s.csv", suffix)),
           row.names = FALSE)
 write.csv(balance_all,
-          file.path(RESULTS, sprintf("psm_balance_%s_%s.csv", variant, tag)),
+          file.path(RESULTS, sprintf("psm_balance_%s.csv", suffix)),
           row.names = FALSE)
 write.csv(binary_all,
-          file.path(RESULTS, sprintf("did_binary_%s_%s.csv", variant, tag)),
+          file.path(RESULTS, sprintf("did_binary_%s.csv", suffix)),
           row.names = FALSE)
 write.csv(pairs_all,
           file.path(RESULTS, sprintf(
-            "did_pairs_primary_yet_untreated_%s_%s.csv", variant, tag
+            "did_pairs_primary_yet_untreated_%s.csv", suffix
           )),
           row.names = FALSE)
-cat(sprintf("02_psm.R | %s | %s | COMPLETE\n", db, variant))
+cat(sprintf(
+  "02_psm.R | %s | %s | %s | COMPLETE\n",
+  db, variant, analysis_set
+))
