@@ -1,6 +1,6 @@
 # Albumin and Cardiac-Surgery AKI: Frozen Main-Experiment Design
 
-- **Design version:** 3.2
+- **Design version:** 3.3
 - **Freeze date:** 2026-07-19
 - **Status:** **FROZEN BEFORE THE M=20 MAIN EXPERIMENT**
 - **Canonical estimator:** `02_psm.R`
@@ -16,10 +16,15 @@ MIMIC pooled run exposed an alive-at-T0 eligibility bug and immortal-time bias
 in whole-stay mortality. It does not change the AKI estimand, matching ratio,
 replacement rule, MICE, HC1, DR rule, trigger category, or creatinine outcomes.
 
-Version 3.2 freezes the primary adjustment set after the precommitted m=5
-MIMIC pooled covariate sweep and before any m=20 main-experiment run. The
-supervisor-authorized primary set is S2. S0 and S1 are sensitivity sets only;
-S3-S5 are excluded from the main experiment.
+Version 3.2 froze S2 after the precommitted m=5 MIMIC pooled covariate sweep.
+Version 3.3 is the supervisor-authorized amendment recorded in `JOURNAL.md`
+Entries 12b, 14, and 16. Before the unified m=20 rerun it adds the pre-T0
+`surg_aortic` indicator to the primary adjustment set, preserves the implemented
+strict-before-T0 values, standardizes their display labels, and removes eICU's
+post-T0-contaminated APACHE day-1 ventilation proxy. MIMIC is primary; eICU is
+supplementary because vaso/MAP are unavailable and early mortality
+falsification was non-null. S0, S1, and S2-without-aortic are sensitivities;
+S3-S5 remain excluded.
 
 ## 1. Question and estimand
 
@@ -33,6 +38,16 @@ patient, `T0` is the first accepted IV albumin administration after ICU
 admission. Eligible controls have received no accepted IV albumin at that T0;
 patients treated later may serve as controls before their own treatment.
 Never-treated-only controls are not the primary comparison.
+
+### Baseline-at-T0 timing convention
+
+Every table and Methods description uses one display convention:
+**baseline (at ICU T0)**. For a measured lab or vital this means the most recent
+qualifying value **strictly before T0** (`offset_h < index_h`); for an ongoing
+organ support it means status at T0. The display convention is label-only and
+does not change any covariate value. Same-timestamp measurements are not
+admitted with `<=`. The alternative `sens_b` lab-timing specification is
+labeled **earliest ICU value**.
 
 ## 2. Time zero and the two creatinine references
 
@@ -77,33 +92,34 @@ albumin category may substitute for the strict-pre-index category.
 
 ## 4. Propensity score and matching
 
-### Version 3.2 frozen primary adjustment set
+### Version 3.3 frozen primary adjustment set
 
-The MIMIC primary propensity-score set is **S2**, comprising the magnesium-base
-set plus the prespecified resuscitation-severity covariates:
+The MIMIC primary propensity-score set is **S2 plus `surg_aortic` (23
+covariates)**, comprising the magnesium-base set, the prespecified
+resuscitation-severity covariates, and the complete surgery-type block:
 
 - age, sex, BMI;
-- CABG, valve, and combined-surgery indicators;
+- CABG, valve, combined-surgery, and aortic-surgery indicators;
 - heart failure, hypertension, diabetes, COPD, peripheral vascular disease,
   stroke, and liver disease;
 - eGFR in the pooled model;
-- last strict-pre-index lactate, lactate-missing indicator, heart rate, and
-  hemoglobin;
-- strict-pre-index `alb_cat`;
-- vasopressor status at T0, last MAP strictly before T0, and ventilation status
-  at T0.
+- baseline-at-T0 lactate, lactate-missing indicator, heart rate, hemoglobin, and
+  categorical serum-albumin trigger (`alb_cat`);
+- baseline-at-T0 vasopressor support, MAP, and ventilation support.
 
-The eICU primary set deliberately drops vasopressor status and MAP because
-their hospital-level missingness is informative; it retains ventilation status
-at T0. This database-specific difference is prespecified and must be explicit
-in every results report.
+The eICU supplementary set is the magnesium-base set plus `surg_aortic`. It
+deliberately drops vasopressor and MAP because their hospital-level missingness
+is informative, and drops ventilation because the available APACHE day-1 flag
+can post-date T0. This database-specific under-adjustment is prespecified and
+must be explicit in every results report; eICU is directional supplementary
+evidence, not co-primary validation.
 
-S0 (the magnesium-mirror base set) and S1 (S0 plus vasopressor status in MIMIC)
-are sensitivity specifications only. S3-S5 are excluded from primary and
-sensitivity outcome reporting because the m=5 sweep showed broad imputation/PS
-instability; S4 additionally contains near-path resuscitation variables.
-An optional single m=20 S3 balance diagnostic is informational only and cannot
-change the frozen primary set.
+S0 (the magnesium-mirror base set), S1 (S0 plus baseline-at-T0 vasopressor
+support in MIMIC), and S2-without-aortic are sensitivity specifications only.
+S3-S5 are excluded from primary and sensitivity outcome reporting because the
+m=5 sweep showed broad imputation/PS instability; S4 additionally contains
+near-path resuscitation variables. No sensitivity result can change the frozen
+primary set.
 
 Calcium, potassium, magnesium, extended S3-S5 covariates, continuous albumin,
 emergency-admission route, SOFA/APACHE-24h, intraoperative variables, LVEF, and
@@ -118,7 +134,7 @@ For the eGFR-stratified analysis, form strata from `baseline_cr`:
 
 Match within each stratum and remove eGFR and any redundant CKD indicator from
 that stratum's PS. The pooled analysis retains eGFR; CKD is not part of the
-version 3.2 primary set.
+version 3.3 primary set.
 
 For every database and analysis:
 
@@ -179,10 +195,10 @@ Before releasing eGFR-stratified or eICU analyses, MIMIC pooled evaluates the
 ordered, cumulative, strictly pre-index registry:
 
 - S0: frozen magnesium-base set;
-- S1: S0 plus vasopressor status at T0;
-- S2: S1 plus last MAP before T0 and ventilation status at T0;
-- S3: S2 plus last platelet, INR, hematocrit, bicarbonate, BUN, and sodium
-  before T0;
+- S1: S0 plus baseline-at-T0 vasopressor support;
+- S2: S1 plus baseline-at-T0 MAP and ventilation support;
+- S3: S2 plus baseline-at-T0 platelet, INR, hematocrit, bicarbonate, BUN, and
+  sodium;
 - S4: S3 plus RBC exposure, cumulative crystalloid, and cumulative urine
   output strictly before first-albumin T0;
 - S5: S4 plus aortic and prior cardiac surgery;
@@ -197,22 +213,24 @@ set is rerun at m=20. Calcium, emergency-admission route, continuous albumin,
 SOFA/APACHE-24h, intraoperative variables, and LVEF are excluded. The full
 sweep is retained as a transparency analysis.
 
-### Version 3.2 sweep decision
+### Version 3.3 adjustment-set decision
 
 The completed m=5 sweep selected S2 before the m=20 run. S2 covers the
 resuscitation-severity axis while preserving the authorized compromise between
-balance and the fixed-window mortality-RD falsification. Selection was not
-based on the AKI estimate. S0 and S1 remain sensitivities; S3-S5 are excluded
-for the reasons in Section 4.
+balance and the fixed-window mortality-RD falsification. Yan's prespecified
+refinement adds `surg_aortic`, a pre-T0 time-invariant surgery indicator, to
+test whether incomplete surgery-type adjustment explains residual imbalance.
+Selection was not based on the AKI estimate. S0, S1, and S2-without-aortic
+remain sensitivities; S3-S5 are excluded for the reasons in Section 4.
 
 ## 6. Prespecified analyses and reporting
 
 The main experiment contains only:
 
-1. pooled risk-set matching in MIMIC;
-2. eGFR-stratified risk-set matching in MIMIC;
-3. pooled risk-set matching in eICU;
-4. eGFR-stratified risk-set matching in eICU;
+1. pooled risk-set matching in MIMIC (primary);
+2. eGFR-stratified risk-set matching in MIMIC (primary);
+3. pooled risk-set matching in eICU (supplementary);
+4. eGFR-stratified risk-set matching in eICU (supplementary);
 5. formal treatment-by-eGFR interaction and prespecified subgroup estimates in
    each database.
 
@@ -221,6 +239,11 @@ stratum-specific outcome ORs with 95% CIs, formal interaction P values,
 mortality falsification, and arm-level post-T0 creatinine missingness.
 Report all prespecified horizons and stages, including discordant or null
 patterns. No result-driven estimator changes or selective emphasis are allowed.
+For MIMIC pooled, report the raw and matched `surg_aortic` SMD and compare
+maximum SMD and violation count with the m=20 S2-without-aortic sensitivity.
+For eICU, report an under-adjustment diagnostic on available baseline axes and
+state explicitly that vaso/MAP are unmeasured and ventilation is omitted.
 
-Landmark, alternative lab-timing specifications, flexible PS models, LLM
-endpoints, PS-2, and IUH validation are deferred.
+Landmark, the `sens_b` **earliest ICU value** lab-timing specification, flexible
+PS models, LLM endpoints, PS-2, and IUH validation are deferred. IUH Phase 7,
+using MIMIC-grade hemodynamics, is the planned external validation.

@@ -1909,3 +1909,29 @@ the ambiguous shorthand `@T0`.
 - Tempest job `4262490`; no patient-level output was transferred.
 
 >>> GUARD-RAIL STOP. No v3.3 freeze or outcome run was performed. Awaiting explicit timing-definition approval. <<<
+
+---
+
+## Entry 16 — Supervisor: timing = strictly-before-T0 (option 1); proceed to v3.3 full run  (2026-07-19, Claude)
+
+Good catch — the guard did its job. **My Entry 12b wording ("@T0 = most recent value at or before T0")
+was imprecise.** The implemented and causally-correct construct is "latest value **strictly before T0**"
+(`offset_h < index_h`). Switching to `<=` would pull same-timestamp lab panels drawn *at* the T0 instant
+into the covariates — for the treated arm that is concurrent with the albumin decision (contamination),
+and the hemoglobin deltas (6,481 MIMIC / 13,051 eICU) show it is a real, not cosmetic, change.
+
+**Decision — Codex option 1 (approved):** keep **strictly-before-T0** values for all labs/vitals; ongoing
+organ supports (vasopressor, ventilation) = **status at T0**. This is **value-preserving**, so the Entry 13
+MIMIC results remain valid. Yan's consistency concern is met by a **uniform label**, not a value change:
+in `STUDY_DESIGN.md`, all tables, and Methods, use one convention — **"baseline (at ICU T0): most recent
+value strictly before T0; organ-support status at T0"** — and drop the mixed `last_*` / `@T0` / `*_before_t0`
+wording. Do **not** use `<=`. This corrects Entry 12b point 2.
+
+Everything else stands: add `surg_aortic` (Entry 12b), omit the eICU ventilation proxy and treat eICU as
+supplementary (Entry 14). **Freeze v3.3 = S2 + surg_aortic (23 cov), strict-before labs, uniform "baseline
+at T0" labels, eICU vent omitted.** Then run the full m=20 — MIMIC pooled + eGFR-stratified + HTE (headline
+interaction), eICU (clean) pooled + eGFR-stratified + HTE (supplementary) — since neither the HTE nor
+eICU-stratified nor surg_aortic has actually run yet. Sensitivities S0/S1/S2-without-aortic; falsification =
+fixed-window RD primary.
+
+>>> APPROVED: strictly-before-T0 (label-only unification); freeze v3.3 (S2+aortic, eICU vent omitted); run the full m=20 incl. HTE; stop at Entry 17. <<<
