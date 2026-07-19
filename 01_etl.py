@@ -84,6 +84,23 @@ def matches_any(series, patterns):
     return mask
 
 
+def select_max_value_at_extreme_time(df, id_col, time_col, value_col, extreme):
+    """Select min/max time per patient, then maximum value at that timestamp."""
+    if extreme not in {"min", "max"}:
+        raise ValueError("extreme must be 'min' or 'max'")
+    if df.empty:
+        return df.copy()
+    selected_time = df.groupby(id_col)[time_col].transform(extreme)
+    at_time = df[df[time_col] == selected_time].copy()
+    return (
+        at_time.sort_values(
+            [id_col, value_col], ascending=[True, False], kind="mergesort"
+        )
+        .drop_duplicates(id_col, keep="first")
+        .reset_index(drop=True)
+    )
+
+
 def compute_egfr(cr, age, is_female):
     cr, age, fem = (
         np.asarray(cr, float),
@@ -422,7 +439,8 @@ def run_eicu():
     frames = []
     if len(med_ok) > 0:
         alb_m = med_ok[
-            matches_any(med_ok.drugname, ALB_INFUSION_PATTERNS)
+            med_ok.patientunitstayid.isin(pids)
+            & matches_any(med_ok.drugname, ALB_INFUSION_PATTERNS)
             & (med_ok.drugstartoffset >= 0)
         ]
         if "routeadmin" in alb_m.columns:
@@ -509,12 +527,12 @@ def run_eicu():
         & lab.labname.str.lower().str.contains("creatinine", na=False)
         & lab.labresult.between(CR_MIN, CR_MAX)
     ].copy()
-    cr_first = (
-        cr[cr.labresultoffset >= 0]
-        .sort_values("labresultoffset")
-        .groupby("patientunitstayid")
-        .first()
-        .reset_index()
+    cr_first = select_max_value_at_extreme_time(
+        cr[cr.labresultoffset >= 0],
+        "patientunitstayid",
+        "labresultoffset",
+        "labresult",
+        "min",
     )
 
     # Cr baseline: primary = last before T0; fallback = hospital admission
@@ -524,11 +542,12 @@ def run_eicu():
     cr_pre_t = cr_t[
         (cr_t.labresultoffset >= 0) & (cr_t.labresultoffset < cr_t.alb_offset_min)
     ]
-    cr_pre_last = (
-        cr_pre_t.sort_values("labresultoffset")
-        .groupby("patientunitstayid")
-        .last()
-        .reset_index()
+    cr_pre_last = select_max_value_at_extreme_time(
+        cr_pre_t,
+        "patientunitstayid",
+        "labresultoffset",
+        "labresult",
+        "max",
     )
     has_cr_pre = set(cr_pre_last.patientunitstayid)
     consort["treated_has_cr_pre"] = len(has_cr_pre)
@@ -543,11 +562,12 @@ def run_eicu():
         & (cr_h_all.labresultoffset < 0)
     ].copy()
     cr_h_all["_dist"] = (cr_h_all.labresultoffset - cr_h_all.hosp_off).abs()
-    cr_hosp_all = (
-        cr_h_all.sort_values(["patientunitstayid", "_dist"])
-        .groupby("patientunitstayid")
-        .first()
-        .reset_index()
+    cr_hosp_all = select_max_value_at_extreme_time(
+        cr_h_all,
+        "patientunitstayid",
+        "_dist",
+        "labresult",
+        "min",
     )
     cr_hosp = cr_hosp_all[cr_hosp_all.patientunitstayid.isin(treated_pids - has_cr_pre)]
     rescue_pids = set(cr_hosp.patientunitstayid) - has_cr_pre
@@ -1155,12 +1175,8 @@ def run_mimic():
     cr = cr.merge(cardiac[["stay_id", "hadm_id", "intime"]], on="hadm_id")
     cr["offset_h"] = (cr.charttime - cr.intime).dt.total_seconds() / 3600
     cr["offset_min"] = cr.offset_h * 60
-    cr_first = (
-        cr[cr.offset_h >= 0]
-        .sort_values("offset_h")
-        .groupby("stay_id")
-        .first()
-        .reset_index()
+    cr_first = select_max_value_at_extreme_time(
+        cr[cr.offset_h >= 0], "stay_id", "offset_h", "valuenum", "min"
     )
 
     # Cr baseline: primary = last before T0; fallback = hospital admission
@@ -1168,8 +1184,8 @@ def run_mimic():
         first_alb[["stay_id", "alb_offset_h", "alb_offset_min"]], on="stay_id"
     )
     cr_pre_t = cr_t[(cr_t.offset_h >= 0) & (cr_t.offset_min < cr_t.alb_offset_min)]
-    cr_pre_last = (
-        cr_pre_t.sort_values("offset_h").groupby("stay_id").last().reset_index()
+    cr_pre_last = select_max_value_at_extreme_time(
+        cr_pre_t, "stay_id", "offset_h", "valuenum", "max"
     )
     has_cr = set(cr_pre_last.stay_id)
     consort["treated_has_cr_pre"] = len(has_cr)
@@ -1178,12 +1194,12 @@ def run_mimic():
     adm_times.admittime = pd.to_datetime(adm_times.admittime)
     cr_hadm = cr.merge(adm_times, on="hadm_id", how="left")
     cr_hadm["pre_adm"] = cr_hadm.charttime < cr_hadm.admittime
-    hosp_cr_all = (
-        cr_hadm[cr_hadm.pre_adm]
-        .sort_values("charttime", ascending=False)
-        .groupby("stay_id")
-        .first()
-        .reset_index()
+    hosp_cr_all = select_max_value_at_extreme_time(
+        cr_hadm[cr_hadm.pre_adm],
+        "stay_id",
+        "charttime",
+        "valuenum",
+        "max",
     )
     hosp_cr = hosp_cr_all[hosp_cr_all.stay_id.isin(treated_stays - has_cr)]
     rescue = set(hosp_cr.stay_id)

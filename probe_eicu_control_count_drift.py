@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnose the one-patient eICU control-count drift; aggregate output only.
+"""Verify the approved eICU control tie rule; aggregate output only.
 
 Not part of the primary pipeline. Reconstructs the pre-ESKD cardiac cohort,
 accepted albumin exposure pool, and control creatinine eligibility, then asks
@@ -126,8 +126,8 @@ def main():
     discordant = tied[
         (tied.min_cr < etl.BASELINE_CR_MAX) & (tied.max_cr >= etl.BASELINE_CR_MAX)
     ]
-    stable_low = int((summary.min_cr < etl.BASELINE_CR_MAX).sum())
-    stable_high = int((summary.max_cr >= etl.BASELINE_CR_MAX).sum())
+    min_rule_controls = int((summary.min_cr < etl.BASELINE_CR_MAX).sum())
+    max_rule_controls = int((summary.max_cr < etl.BASELINE_CR_MAX).sum())
 
     print(f"post_eskd={len(pids):,}")
     print(f"treated_any_iv_albumin={len(treated):,}")
@@ -135,19 +135,17 @@ def main():
     print(f"control_has_2cr={len(eligible):,}")
     print(f"earliest_offset_tied_patients={len(tied):,}")
     print(f"threshold_discordant_ties={len(discordant):,}")
-    print(f"eligible_if_tie_min_cr={stable_low:,}")
-    print(f"excluded_if_tie_max_cr={stable_high:,}")
+    print(f"eligible_if_tie_min_cr={min_rule_controls:,}")
+    print(f"eligible_if_tie_max_cr={max_rule_controls:,}")
     assert len(eligible) == 17149, "FAIL: upstream control Cr eligibility drifted"
-    if len(discordant):
-        print(
-            "GUARD-RAIL HIT: earliest-offset ties cross baseline Cr 4.0; "
-            "a deterministic clinical tie rule requires supervisor approval"
-        )
-    else:
-        print(
-            "NO THRESHOLD-DISCORDANT TIE: investigate raw-file/version drift; "
-            "do not modify ETL automatically"
-        )
+    assert len(treated) == 3778, "FAIL: post-ESKD exposure count drifted"
+    assert min_rule_controls == 16780, "FAIL: min-rule sensitivity count drifted"
+    assert max_rule_controls == 16778, "FAIL: approved max-rule count drifted"
+    assert len(discordant) == 2, "FAIL: threshold-discordant tie count drifted"
+    print(
+        "PASS: approved maximum-at-earliest-time rule gives 16,778 controls; "
+        "minimum-at-earliest-time sensitivity gives 16,780"
+    )
 
 
 if __name__ == "__main__":

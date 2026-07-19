@@ -107,6 +107,27 @@ def main(db):
         cohort.pid
     ), "FAIL: early reference not traceable to timestamped Cr"
 
+    for value_col, time_col, label in (
+        ("baseline_cr", "baseline_cr_offset_h", "baseline"),
+        ("cr_ref_early", "cr_ref_early_offset_h", "early reference"),
+    ):
+        selected = cohort[["pid", value_col, time_col]].merge(
+            cr[["pid", "labresult", "offset_h"]], on="pid", how="left"
+        )
+        at_selected_time = selected[np.isclose(selected[time_col], selected.offset_h)]
+        max_at_selected_time = (
+            at_selected_time.groupby("pid").labresult.max().rename("expected_max")
+        )
+        checked = cohort[["pid", value_col]].merge(
+            max_at_selected_time, left_on="pid", right_index=True, how="left"
+        )
+        assert (
+            checked.expected_max.notna().all()
+        ), f"FAIL: {label} selected timestamp absent from raw Cr"
+        assert np.isclose(
+            checked[value_col], checked.expected_max
+        ).all(), f"FAIL: {label} is not maximum Cr at selected timestamp"
+
     treated_cr = cr.merge(
         treated[
             [
@@ -160,7 +181,8 @@ def main(db):
         "(descriptive only; not excluded)"
     )
     print(
-        "PASS: two-reference values, tiers, timing, raw-stream trace, and eGFR invariants"
+        "PASS: two-reference values, max-at-selected-time tie rule, tiers, "
+        "timing, raw-stream trace, and eGFR invariants"
     )
 
 
