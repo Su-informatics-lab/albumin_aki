@@ -1066,3 +1066,88 @@ no-post-Cr probes. Therefore no per-stratum estimates, eICU estimates, or treatm
 interaction P values are available at this stopped gate.
 
 >>> GUARD-RAIL STOP. Awaiting supervisor review; do not resume the remaining main experiment or alter the frozen estimator. <<<
+
+---
+
+## Entry 8 — Supervisor review of MIMIC pooled: fix the falsification before proceeding  (2026-07-18, Claude)
+
+Correct stop. A **protective mortality falsification (whole-stay OR 0.31 PSM / 0.55 DR)** is the classic
+signature of selection / immortal-time bias in a first-treatment risk set — not a real effect. The probe
+pins it: (a) 7 controls dead at/before T0; (b) later-treated controls = 11.9% of control rows at 20.1%
+mortality vs 5.78% never-treated (whole-stay crossover deaths charged to the control arm); (c) early-T0
+control mortality 9–10% vs treated 1–2% (early-death enrichment). **Until the falsification is ~null, the
+AKI harm signal cannot be read as causal** — the same selection plus the differential missing-post-Cr
+(0.68% vs 0.07%) both inflate apparent albumin harm. This is LESSONS §1 in real time: do not build the
+paper on this pooled main effect yet.
+
+Decisions:
+
+1. **[Codex #1] APPROVE the alive-at-T0 eligibility repair.** Add to the risk-set predicate: control must
+   be **alive at T0** (`is.na(death_offset_h) | death_offset_h > T0`), alongside in-ICU + outcome-free +
+   has-baseline. Remove the 7 dead-at-T0 rows. This mirrors mg (mg's risk set requires alive at T0) — a
+   bug fix, not a design change.
+
+2. **[Codex #2] Falsify mortality on a FIXED WINDOW, not whole-stay.** Whole-stay `hosp_mortality` is
+   immortal-time-biased here. Change the falsification to **death within 48h and within 7d of T0** (this
+   is what mg actually reported, and it matches the AKI estimand). **Diagnostics to report** so we know
+   the residual isn't crossover-driven: fixed-window mortality (i) all controls, (ii) never-treated
+   controls only, (iii) later-treated controls censored at crossover. Keep whole-stay mortality as a
+   clearly-labeled descriptive row, not the falsification. Amend `STUDY_DESIGN.md` → **v3.1** documenting
+   this as a corrected-falsification amendment (documented, not silent drift). Not a new method.
+
+3. **[Codex #3] Keep the frozen HC1 + DR estimator; do NOT change the replacement rule or the PS.** Flag
+   as limitations, don't fix around: heavy control reuse (effective N ~1,195 — report a control-ID
+   **cluster-robust SE as an OPTIONAL labeled sensitivity** only); and the stage-3-48h PSM→DR reversal
+   (rare outcome + residual imbalance eGFR 0.193 / alb_cat 0.202 — the eGFR-stratified variant should
+   improve balance; report stage-3 as unstable/demoted, failure-modes #13/#14).
+
+**Instruction:** apply #1 + #2, amend the freeze to v3.1, then **re-run ONLY MIMIC pooled and STOP.**
+Report the corrected falsification (48h + 7d fixed-window + the three crossover diagnostics), the AKI ORs,
+and the T0-quartile mortality breakdown. **Do NOT run the eGFR-stratified, eICU, or HTE models until I
+confirm the falsification is acceptably null.** If it is, I release the full remaining main experiment; if
+it is still strongly protective, we escalate (deeper confounding-by-indication → severity adjustment or a
+reconsideration of the pooled contrast).
+
+>>> GUARD-RAIL upheld. Fix eligibility + fixed-window falsification → re-run MIMIC pooled only → STOP for falsification review. <<<
+
+---
+
+## Entry 8b — Supervisor: covariate sweep + OR & RD for all outcomes  (2026-07-18, Claude)
+
+Refinement from Haining, folded into the Entry 8 re-run:
+
+- **Report OR AND absolute risk/rate difference (RD) for every binary outcome** (mortality falsification
+  + all AKI outcomes), with CIs. Death and stage-3 AKI are sparse: the OR can look alarming while the RD
+  is tiny. **Judge the falsification by both — a large OR on a small RD is a note; a large RD is a real
+  warning.** RD is often the more revealing measure when events are sparse.
+
+- **Covariate sweep (MIMIC pooled first).** Add the previously-deferred covariates back **incrementally**
+  and watch how mortality (OR+RD) and AKI (OR+RD) move as confounding control improves. Ordered,
+  **strictly pre-T0** sets:
+  - S0 = base mg set (current)
+  - S1 = S0 + `surg_aortic`
+  - S2 = S1 + `vent_at_t0`
+  - S3 = S2 + `vaso_at_t0`
+  - S4 = S3 + `MAP_before_t0`
+  - S5 = S4 + extended labs (`platelet, INR, BUN, bicarbonate, sodium, hct`)
+  - S6 (optional) = S5 + pre-T0 `crystalloid/urine/RBC`
+  No downstream/post-T0 variables. **eICU excludes vaso/MAP/fluid** (informative missingness) — its sweep
+  runs only over available covariates.
+
+- **Selection criterion (anti-shopping, pre-committed):** choose the frozen adjustment set by (i) balance
+  (fewest SMD>0.1, lowest max SMD) and (ii) the **falsification moving toward null** — **NOT** by the AKI
+  OR. Report the **full sweep** as a transparency panel (every set, every outcome); do not cherry-pick the
+  set that maximizes the AKI effect. Hypothesis under test: better severity/indication adjustment should
+  attenuate the spurious protective mortality; if the AKI harm persists once mortality is ~null, it is robust.
+
+- **Utilities to build (so the rest is a few runs):** `pair_or_rd()` (OR + RD + CI + P for matched pairs,
+  HC1); an ordered covariate-set registry; a sweep driver emitting one tidy CSV
+  (`set × outcome × {OR, RD, CI, P} × {max_SMD, n_viol, match_rate}`). Reused for stratified / eICU / HTE / IUH.
+
+- **Keep the Entry 8 fixes** (alive-at-T0 eligibility; fixed-window 48h/7d falsification + crossover
+  diagnostics). Keep HC1/DR, 1:1 with replacement, m=20 frozen.
+
+Run the sweep on **MIMIC pooled only**, then STOP with the sweep table (Entry 9). We freeze the adjustment
+set that de-confounds mortality and then release the stratified + eICU + HTE runs.
+
+>>> Sweep authorized: MIMIC pooled, incremental pre-T0 covariates, OR+RD for all outcomes, select on falsification+balance (not AKI OR). STOP with the sweep table. <<<
