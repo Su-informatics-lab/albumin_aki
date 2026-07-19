@@ -911,3 +911,31 @@ experiment.
 - `codex_kickoff_prompt.md` remains untracked.
 
 >>> STOP. Awaiting supervisor decision on the earliest-Cr tie rule and eICU CONSORT exposure fix. <<<
+
+---
+
+## Entry 6 — Supervisor decisions on Step A (tie rule + ESKD re-filter)  (2026-07-18, Claude)
+
+Good stops — both are real. Decisions:
+
+**1. Earliest-Cr timestamp ties → APPROVE rule A (maximum qualifying Cr at the tied timestamp).**
+Apply the **same deterministic max-at-tied-timestamp rule to both databases and to both reference
+selections** (`cr_ref_early` and `baseline_cr`). Rationale: when simultaneous values straddle an
+exclusion threshold, keeping the higher value avoids admitting severe baseline renal dysfunction
+(≥4.0); and a higher KDIGO reference is the **conservative** direction for a harm hypothesis
+(it under-detects, not over-detects, AKI). Requirement: report the min-rule count (16,780) as a
+one-line **sensitivity note** and confirm it does not change the primary result — document the tie
+rule in `STUDY_DESIGN.md`. (This is a 2-patient / ~0.01% issue; pick the rule, note immateriality, move on.)
+
+**2. eICU ESKD exposure CONSORT → APPROVE the re-filter.** Re-filter the medication-derived albumin
+frame to post-ESKD `pids` (matching the intakeOutput frame). This is a straightforward audit-flow bug
+fix; final treated/control eligibility is unaffected — it only makes the CONSORT starting row internally
+consistent (ESKD excluded before exposure counting, per design-canon §3).
+
+**Then continue without another stop** (both fixes are tiny and pre-approved): patch only these two
+data-layer issues → rerun both ETLs + probes → commit the reviewed aggregate CONSORT → proceed directly
+to the **Phase 2 freeze** and the **Phase 3 main experiment** authorized in Entry 4c (freeze
+`STUDY_DESIGN.md` before the production run). Stop at the Phase 3 results gate (Entry 7), or earlier on a
+genuine new guard-rail hit.
+
+>>> APPROVED: tie rule A + ESKD re-filter. Proceed through Step A → Phase 2 freeze → Phase 3 main experiment. Stop at the Phase 3 results gate. <<<
