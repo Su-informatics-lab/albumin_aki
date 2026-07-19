@@ -201,7 +201,7 @@ def save_consort(consort, db_tag):
             "treated",
             "baseline_after_admit_window_fallback",
             "treated_has_cr_pre_with_fallback",
-            "treated_any_iv_alb",
+            "treated_has_cr_pre",
         ),
         (
             "treated",
@@ -229,8 +229,11 @@ def save_consort(consort, db_tag):
                 "branch": branch,
                 "step": step,
                 "n": n,
+                "change_from_previous": (
+                    n - previous_n if previous_n is not None else np.nan
+                ),
                 "excluded_from_previous": (
-                    previous_n - n if previous_n is not None else np.nan
+                    max(previous_n - n, 0) if previous_n is not None else np.nan
                 ),
             }
         )
