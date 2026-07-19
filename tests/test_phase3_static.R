@@ -39,11 +39,24 @@ stopifnot(identical(
   c(FALSE, TRUE, FALSE, FALSE)
 ))
 stopifnot(
-  identical(names(COVARIATE_SETS), paste0("S", 0:5)),
-  all(vapply(seq_len(5), function(i) {
+  identical(names(COVARIATE_SETS), paste0("S", 0:6)),
+  all(vapply(seq_len(6), function(i) {
     all(COVARIATE_SETS[[i]] %in% COVARIATE_SETS[[i + 1]])
   }, logical(1))),
-  !any(grepl("post|outcome|death|rrt", unlist(COVARIATE_SETS)))
+  identical(setdiff(COVARIATE_SETS$S1, COVARIATE_SETS$S0), "vaso_at_t0"),
+  identical(
+    setdiff(COVARIATE_SETS$S2, COVARIATE_SETS$S1),
+    c("map_before_t0", "vent_at_t0")
+  ),
+  identical(
+    setdiff(COVARIATE_SETS$S4, COVARIATE_SETS$S3),
+    c("rbc_before_t0", "crystalloid_before_t0", "urine_before_t0")
+  ),
+  !any(c(
+    "calcium", "last_calcium", "adm_emergency", "continuous_albumin",
+    "sofa", "apache", "lvef"
+  ) %in% unlist(COVARIATE_SETS)),
+  !any(grepl("post|outcome|death|rrt|intraop", unlist(COVARIATE_SETS)))
 )
 
 death <- fixed_window_death(c(NA, 12, 70, 200), rep(10, 4), 48)

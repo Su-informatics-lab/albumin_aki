@@ -16,12 +16,8 @@ cr_all$pid <- cr_all$stay_id
 
 ordered <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
 correct_list <- split(ordered[, c("labresult", "offset_h")], ordered$pid)
-# Reproduce the sweep driver's pre-run construction exactly.
-driver_list <- split(
-  cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult),
-         c("labresult", "offset_h")],
-  cr_all$pid
-)
+# Reproduce the corrected sweep driver's construction exactly.
+driver_list <- split(ordered[, c("labresult", "offset_h")], ordered$pid)
 
 early_value <- setNames(all_pts$cr_ref_early, as.character(all_pts$pid))
 early_offset <- setNames(all_pts$cr_ref_early_offset_h, as.character(all_pts$pid))
@@ -66,6 +62,11 @@ out <- data.frame(
     sum(xor(incident_correct, incident_driver)),
     sum(!alive)
   )
+)
+stopifnot(
+  out$n[out$metric == "eligible_driver_cr_alignment"] == 5428,
+  out$n[out$metric == "prevalent_excluded_driver_alignment"] == 343,
+  out$n[out$metric == "first_aki_classification_discordant"] == 0
 )
 write.csv(
   out, file.path(results, "probe_sweep_eligibility_mimic.csv"),

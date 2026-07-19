@@ -14,7 +14,7 @@ source(file.path(repo, "R", "causal_helpers.R"))
 source(file.path(repo, "R", "covariate_registry.R"))
 
 RESULTS <- path.expand("~/albumin_aki/results")
-M_IMP <- 20
+M_IMP <- 5
 CALIPER_SD <- 0.2
 PRIMARY_H <- 24
 SEED <- 2026
@@ -183,17 +183,18 @@ surg <- safe_read("surg_mimic.csv")
 vent <- safe_read("strm_vent_mimic.csv")
 vaso <- safe_read("strm_vaso_mimic.csv")
 map_stream <- safe_read("strm_map_mimic.csv")
+blood <- safe_read("strm_blood_mimic.csv")
+fluid <- safe_read("strm_fluid_mimic.csv")
+output_stream <- safe_read("strm_output_mimic.csv")
 cr_all$pid <- cr_all$stay_id
 labs$pid <- labs$stay_id
-cr_list <- split(
-  cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult),
-         c("labresult", "offset_h")],
-  cr_all$pid
-)
+ordered <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
+cr_list <- split(ordered[, c("labresult", "offset_h")], ordered$pid)
 all_pts <- build_sweep_covariates(
-  all_pts, labs, labs_ext, surg, vent, vaso, map_stream
+  all_pts, labs, labs_ext, surg, vent, vaso, map_stream,
+  blood, fluid, output_stream
 )
-rm(labs, labs_ext, surg, vent, vaso, map_stream)
+rm(labs, labs_ext, surg, vent, vaso, map_stream, blood, fluid, output_stream)
 gc()
 
 early_value <- setNames(all_pts$cr_ref_early, as.character(all_pts$pid))
@@ -217,7 +218,8 @@ treated_ok <- treated_all[
 cat(sprintf("  treated eligible: %d/%d\n", length(treated_ok),
             length(treated_all)))
 
-union_vars <- unique(unlist(COVARIATE_SETS))
+RUN_SETS <- paste0("S", 0:5)
+union_vars <- unique(unlist(COVARIATE_SETS[RUN_SETS]))
 union_vars <- usable_vars(all_pts, union_vars)
 imputed <- prepare_imputations(all_pts, union_vars)
 cat(sprintf("  MICE m=%d; logged events=%d\n", M_IMP,
@@ -234,7 +236,7 @@ binary_outcomes <- c(
 continuous_outcomes <- c("delta_cr_48h", "delta_cr_7d")
 output <- list()
 
-for (set_name in names(COVARIATE_SETS)) {
+for (set_name in RUN_SETS) {
   vars <- usable_vars(all_pts, COVARIATE_SETS[[set_name]])
   ps <- average_ps(all_pts, vars, imputed)
   analysis <- ps$completed

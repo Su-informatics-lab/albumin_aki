@@ -1,42 +1,43 @@
-# Ordered, cumulative MIMIC pooled covariate registry for Entry 8b.
+# Entry 10 cumulative MIMIC pooled covariate registry.
 
 PS_BASE <- c(
   "age", "is_female", "bmi",
   "surg_cabg", "surg_valve", "surg_combined",
-  "heart_failure", "hypertension", "diabetes", "ckd",
-  "copd", "pvd", "stroke", "liver_disease", "egfr"
+  "heart_failure", "hypertension", "diabetes",
+  "copd", "pvd", "stroke", "liver_disease", "egfr",
+  "last_lactate", "last_lactate_missing", "last_heartrate",
+  "last_hemoglobin", "alb_cat"
 )
 
 COVARIATE_SETS <- list(
-  S0 = c(
-    PS_BASE, "last_calcium", "last_lactate", "last_lactate_missing",
-    "last_heartrate", "last_hemoglobin", "alb_cat"
-  ),
-  S1 = c(
-    PS_BASE, "last_calcium", "last_lactate", "last_lactate_missing",
-    "last_heartrate", "last_hemoglobin", "alb_cat", "surg_aortic"
-  ),
-  S2 = c(
-    PS_BASE, "last_calcium", "last_lactate", "last_lactate_missing",
-    "last_heartrate", "last_hemoglobin", "alb_cat", "surg_aortic",
-    "vent_at_t0"
-  ),
+  S0 = PS_BASE,
+  S1 = c(PS_BASE, "vaso_at_t0"),
+  S2 = c(PS_BASE, "vaso_at_t0", "map_before_t0", "vent_at_t0"),
   S3 = c(
-    PS_BASE, "last_calcium", "last_lactate", "last_lactate_missing",
-    "last_heartrate", "last_hemoglobin", "alb_cat", "surg_aortic",
-    "vent_at_t0", "vaso_at_t0"
+    PS_BASE, "vaso_at_t0", "map_before_t0", "vent_at_t0",
+    "last_platelet", "last_inr", "last_hct", "last_bicarbonate",
+    "last_bun", "last_sodium"
   ),
   S4 = c(
-    PS_BASE, "last_calcium", "last_lactate", "last_lactate_missing",
-    "last_heartrate", "last_hemoglobin", "alb_cat", "surg_aortic",
-    "vent_at_t0", "vaso_at_t0", "map_before_t0"
+    PS_BASE, "vaso_at_t0", "map_before_t0", "vent_at_t0",
+    "last_platelet", "last_inr", "last_hct", "last_bicarbonate",
+    "last_bun", "last_sodium",
+    "rbc_before_t0", "crystalloid_before_t0", "urine_before_t0"
   ),
   S5 = c(
-    PS_BASE, "last_calcium", "last_lactate", "last_lactate_missing",
-    "last_heartrate", "last_hemoglobin", "alb_cat", "surg_aortic",
-    "vent_at_t0", "vaso_at_t0", "map_before_t0",
-    "last_platelet", "last_inr", "last_bun", "last_bicarbonate",
-    "last_sodium", "last_hct"
+    PS_BASE, "vaso_at_t0", "map_before_t0", "vent_at_t0",
+    "last_platelet", "last_inr", "last_hct", "last_bicarbonate",
+    "last_bun", "last_sodium",
+    "rbc_before_t0", "crystalloid_before_t0", "urine_before_t0",
+    "surg_aortic", "prior_cardiac_surgery"
+  ),
+  S6 = c(
+    PS_BASE, "vaso_at_t0", "map_before_t0", "vent_at_t0",
+    "last_platelet", "last_inr", "last_hct", "last_bicarbonate",
+    "last_bun", "last_sodium",
+    "rbc_before_t0", "crystalloid_before_t0", "urine_before_t0",
+    "surg_aortic", "prior_cardiac_surgery", "last_wbc",
+    "loop_diuretic", "acei_arb", "nsaid", "ppi"
   )
 )
 
@@ -75,19 +76,36 @@ state_at_index <- function(stream, index) {
   out
 }
 
+sum_before_index <- function(stream, index, value_col, filter = NULL,
+                             binary = FALSE) {
+  out <- setNames(rep(0, nrow(index)), as.character(index$pid))
+  if (is.null(stream) || nrow(stream) == 0) return(out)
+  sub <- if (is.null(filter)) stream else stream[filter(stream), , drop = FALSE]
+  sub$index_h <- index$index_h[match(sub$pid, index$pid)]
+  sub <- sub[
+    !is.na(sub$index_h) & !is.na(sub$offset_h) &
+      sub$offset_h < sub$index_h,
+    , drop = FALSE
+  ]
+  if (nrow(sub) == 0) return(out)
+  if (binary) {
+    out[as.character(unique(sub$pid))] <- 1
+  } else {
+    totals <- tapply(as.numeric(sub[[value_col]]), sub$pid, sum, na.rm = TRUE)
+    out[names(totals)] <- totals
+  }
+  out
+}
+
 build_sweep_covariates <- function(all_pts, labs, labs_ext, surg, vent, vaso,
-                                   map_stream) {
-  # Treated/future-treated patients use own first-albumin T0. Never-treated
-  # patients use their early Cr anchor, which is no later than any eligible
-  # matched T0. This preserves the existing mg static-covariate architecture
-  # while preventing unbounded post-index extraction.
+                                   map_stream, blood, fluid, output) {
   index_h <- ifelse(
     !is.na(all_pts$alb_offset_h),
     all_pts$alb_offset_h,
     all_pts$cr_ref_early_offset_h
   )
   index <- data.frame(pid = all_pts$pid, index_h = index_h)
-  for (lab in c("albumin", "calcium", "lactate", "heartrate", "hemoglobin")) {
+  for (lab in c("albumin", "lactate", "heartrate", "hemoglobin")) {
     values <- last_value_before_index(labs, index, lab_name = lab)
     all_pts[[paste0("last_", lab)]] <- values[as.character(all_pts$pid)]
   }
@@ -99,12 +117,9 @@ build_sweep_covariates <- function(all_pts, labs, labs_ext, surg, vent, vaso,
     ),
     levels = c("normal", "low", "missing")
   )
-  all_pts$surg_aortic <- 0L
-  if (!is.null(surg) && nrow(surg) > 0) {
-    all_pts$surg_aortic <- as.integer(
-      surg$surg_aortic[match(all_pts$pid, surg$pid)]
-    )
-    all_pts$surg_aortic[is.na(all_pts$surg_aortic)] <- 0L
+  for (name in c("surg_aortic", "prior_cardiac_surgery")) {
+    all_pts[[name]] <- as.integer(surg[[name]][match(all_pts$pid, surg$pid)])
+    all_pts[[name]][is.na(all_pts[[name]])] <- 0L
   }
   all_pts$vent_at_t0 <- state_at_index(vent, index)[as.character(all_pts$pid)]
   all_pts$vaso_at_t0 <- state_at_index(vaso, index)[as.character(all_pts$pid)]
@@ -112,9 +127,27 @@ build_sweep_covariates <- function(all_pts, labs, labs_ext, surg, vent, vaso,
     transform(map_stream, value = map), index, value_col = "value"
   )
   all_pts$map_before_t0 <- map_values[as.character(all_pts$pid)]
-  for (lab in c("platelet", "inr", "bun", "bicarbonate", "sodium", "hct")) {
+  for (lab in c(
+    "platelet", "inr", "hct", "bicarbonate", "bun", "sodium", "wbc"
+  )) {
     values <- last_value_before_index(labs_ext, index, lab_name = lab)
     all_pts[[paste0("last_", lab)]] <- values[as.character(all_pts$pid)]
   }
+  all_pts$rbc_before_t0 <- sum_before_index(
+    blood, index, "amount",
+    filter = function(x) x$product == "RBC", binary = TRUE
+  )[as.character(all_pts$pid)]
+  all_pts$crystalloid_before_t0 <- sum_before_index(
+    fluid, index, "amount_ml",
+    filter = function(x) x$class == "crystalloid"
+  )[as.character(all_pts$pid)]
+  all_pts$urine_before_t0 <- sum_before_index(
+    output, index, "amount_ml",
+    filter = function(x) x$kind == "urine"
+  )[as.character(all_pts$pid)]
+  all_pts$loop_diuretic <- all_pts$loop_diuretic_chronic
+  all_pts$acei_arb <- all_pts$acei_arb_chronic
+  all_pts$nsaid <- all_pts$nsaid_chronic
+  all_pts$ppi <- all_pts$ppi_chronic
   all_pts
 }

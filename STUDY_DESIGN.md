@@ -154,17 +154,23 @@ Before releasing eGFR-stratified or eICU analyses, MIMIC pooled evaluates the
 ordered, cumulative, strictly pre-index registry:
 
 - S0: frozen magnesium-base set;
-- S1: S0 plus aortic surgery;
-- S2: S1 plus ventilation status at T0;
-- S3: S2 plus vasopressor status at T0;
-- S4: S3 plus last MAP before T0;
-- S5: S4 plus last platelet, INR, BUN, bicarbonate, sodium, and hematocrit
-  before T0.
+- S1: S0 plus vasopressor status at T0;
+- S2: S1 plus last MAP before T0 and ventilation status at T0;
+- S3: S2 plus last platelet, INR, hematocrit, bicarbonate, BUN, and sodium
+  before T0;
+- S4: S3 plus RBC exposure, cumulative crystalloid, and cumulative urine
+  output strictly before first-albumin T0;
+- S5: S4 plus aortic and prior cardiac surgery;
+- optional S6: S5 plus WBC and chronic loop-diuretic, ACEI/ARB, NSAID, and
+  PPI indicators.
 
 Selection is prespecified on improved balance and mortality falsification
 moving toward null, never on the AKI estimate. Every binary outcome is reported
 as both OR and absolute risk difference with HC1 confidence intervals and P
-values. The full sweep is retained as a transparency analysis.
+values. The comparative sweep uses MICE m=5; only the selected and newly frozen
+set is rerun at m=20. Calcium, emergency-admission route, continuous albumin,
+SOFA/APACHE-24h, intraoperative variables, and LVEF are excluded. The full
+sweep is retained as a transparency analysis.
 
 ## 6. Prespecified analyses and reporting
 
