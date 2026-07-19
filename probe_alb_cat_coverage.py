@@ -24,14 +24,14 @@ def main(db):
     labs = pd.read_csv(os.path.join(cfg.RESULTS, f"did_labs_all_{db}.csv"))
     labs = labs.rename(columns={"stay_id": "pid", "patientunitstayid": "pid"})
     treated = cohort[cohort.treated == 1][["pid", "alb_offset_h", "peri_admission_alb"]]
-    alb = labs[labs.lab_name == "albumin"][["pid", "value", "offset_h"]].merge(
-        treated, on="pid"
-    )
+    alb = labs[(labs.lab_name == "albumin") & labs.value.between(0.5, 8.0)][
+        ["pid", "value", "offset_h"]
+    ].merge(treated, on="pid")
     pre = (
         alb[alb.offset_h < alb.alb_offset_h]
         .sort_values("offset_h")
-        .groupby("pid")
-        .last()
+        .drop_duplicates("pid", keep="last")
+        .set_index("pid")
     )
     assert (
         pre.offset_h < pre.alb_offset_h
