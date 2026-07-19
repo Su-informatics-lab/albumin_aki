@@ -2,10 +2,11 @@ db,step_order,branch,step,n,change_from_previous,excluded_from_previous
 eICU,1,overall,all_icu_stays,200859,,
 eICU,2,overall,adult_first_cardiac_surgery_stay,26725,-174134.0,174134.0
 eICU,3,overall,after_eskd_exclusion,25822,-903.0,903.0
-eICU,4,treated,any_accepted_iv_albumin,3991,,
-eICU,5,treated,icu_cr_strictly_before_own_t0,1775,-2216.0,2216.0
+eICU,4,treated,any_accepted_iv_albumin,3778,,
+eICU,5,treated,icu_cr_strictly_before_own_t0,1775,-2003.0,2003.0
 eICU,6,treated,baseline_after_admit_window_fallback,2385,610.0,0.0
 eICU,7,treated,final_after_baseline_cr_lt_4,2298,-87.0,87.0
 eICU,8,control,never_accepted_iv_albumin,22044,,
 eICU,9,control,at_least_two_post_icu_cr,17149,-4895.0,4895.0
-eICU,10,control,final_after_reference_cr_lt_4,16779,-370.0,370.0
+eICU,10,control,final_after_reference_cr_lt_4,16778,-371.0,371.0
+eICU,11,descriptive,treated_prevalent_aki_at_own_t0_not_excluded,222,,

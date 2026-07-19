@@ -9,3 +9,4 @@ MIMIC,7,treated,final_after_baseline_cr_lt_4,5771,-22.0,22.0
 MIMIC,8,control,never_accepted_iv_albumin,7122,,
 MIMIC,9,control,at_least_two_post_icu_cr,6956,-166.0,166.0
 MIMIC,10,control,final_after_reference_cr_lt_4,6889,-67.0,67.0
+MIMIC,11,descriptive,treated_prevalent_aki_at_own_t0_not_excluded,343,,
