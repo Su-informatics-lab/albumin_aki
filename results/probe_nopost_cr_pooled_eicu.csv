@@ -1,0 +1,3 @@
+"db","variant","stratum","horizon","n_pairs","no_post_cr_trt","no_post_cr_ctl","rate_trt","rate_ctl","rate_difference"
+"EICU","pooled","Overall","48h",1948,111,54,0.0569815195071869,0.0277207392197125,0.0292607802874743
+"EICU","pooled","Overall","7d",1948,47,27,0.0241273100616016,0.0138603696098563,0.0102669404517454

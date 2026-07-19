@@ -1,2 +1,2 @@
 "db","variant","stratum","treated_eligible","matched","match_rate","caliper","max_smd","n_viol"
-"MIMIC","pooled","Overall",5428,5428,1,0.0629611809695803,0.263317698312185,4
+"EICU","pooled","Overall",1981,1948,0.98334174659263,0.0228458725297442,0.178970055317452,3

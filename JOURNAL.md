@@ -1522,3 +1522,261 @@ vaso/MAP per informative missingness; note the covariate-set difference). Report
 mortality falsification per the locked rule. Stop at the results gate (Entry 13).
 
 >>> APPROVED: freeze S2 @ m=20 (primary); S0/S1 sensitivities; S3–S5 excluded. Release MIMIC+eICU pooled + eGFR-stratified + HTE. Stop at the results gate. <<<
+
+---
+
+## Entry 13 — Partial m=20 main experiment; eICU falsification guard STOP  (2026-07-19, Codex)
+
+### Status
+
+**STOPPED before eICU eGFR-stratified matching and before both HTE runs.**
+
+The version 3.2 S2 freeze was committed before any m=20 analysis. MIMIC pooled,
+MIMIC eGFR-stratified, and eICU pooled matching completed. The required
+matched-pair no-post-Cr probe then found materially differential eICU
+missingness, and the eICU 48-hour mortality falsification was non-null on the
+locked primary RD scale. These are guard-rail events, so I did not continue to
+eICU-stratified matching or `03_hte.R`, did not run optional S3, and did not
+change the PS, outcome coding, or estimator.
+
+### Freeze and executable contract
+
+- `56741fb` froze `STUDY_DESIGN.md` version 3.2 before the run: S2 primary;
+  S0/S1 sensitivity; S3-S5 excluded; fixed-window mortality RD primary.
+- `97170da` implemented the frozen contract: m=20; 1:1 with replacement;
+  caliper 0.2; HC1; OR and RD for every binary endpoint; DR for SMD >0.10.
+- MIMIC S2 has 22 variables: base set plus vaso-at-T0, MAP-before-T0, and
+  vent-at-T0.
+- eICU has 20 variables: base set plus its available ventilation proxy;
+  vaso and MAP are explicitly absent because of informative missingness.
+- Static fixtures passed locally and on Tempest:
+
+```text
+PASS: non-event coding, two-reference baseline/tie rule, within-stratum
+matching, frozen S2 database contract, fixed mortality, OR/RD utility
+```
+
+### Exact commands run
+
+Local freeze/code:
+
+```bash
+git commit -m "freeze: lock S2 main experiment design v3.2"
+git push origin main
+Rscript tests/test_phase3_static.R
+git commit -m "phase3: implement frozen S2 main experiment"
+git push origin main
+```
+
+Tempest:
+
+```bash
+cd /home/g91p721/albumin_aki
+git pull --ff-only
+source /etc/profile.d/modules.sh
+module purge
+module load R/4.5.1-gfbf-2025a
+Rscript tests/test_phase3_static.R
+Rscript 02_psm.R mimic pooled
+Rscript probe_nopost_cr.R mimic pooled
+Rscript 02_psm.R mimic egfr
+Rscript probe_nopost_cr.R mimic egfr
+Rscript 02_psm.R eicu pooled
+Rscript probe_nopost_cr.R eicu pooled
+```
+
+Not run:
+
+```text
+Rscript 02_psm.R eicu egfr
+Rscript 03_hte.R mimic
+Rscript 03_hte.R eicu
+optional m=20 S3 diagnostic
+```
+
+### Matching and balance completed before the stop
+
+| Database | Variant/stratum | Eligible | Matched | Match rate | Max SMD | SMD >0.10 |
+|---|---|---:|---:|---:|---:|---:|
+| MIMIC | pooled | 5,428 | 5,428 | 100.0% | 0.263 | 4 |
+| MIMIC | G1 | 2,746 | 2,745 | 99.96% | 0.221 | 2 |
+| MIMIC | G2 | 1,894 | 1,893 | 99.95% | 0.233 | 5 |
+| MIMIC | G3+ | 788 | 786 | 99.75% | 0.350 | 7 |
+| eICU | pooled | 1,981 | 1,948 | 98.33% | 0.179 | 3 |
+
+No match rate collapsed. MIMIC pooled violations were heart failure (0.121),
+eGFR (0.251), hemoglobin (0.176), and `alb_cat` (0.263). In MIMIC G3+, the
+largest residual imbalance was `alb_cat` (0.350), followed by hemoglobin
+(0.246); the prespecified DR adjustment was used rather than changing the PS.
+eICU pooled violations were lactate (0.179), hemoglobin (0.153), and eGFR
+(0.125). Each m=20 MICE fit reported 200 logged events; no silent repair was
+attempted.
+
+### Completed AKI results
+
+The compact cells below are **OR / RD percentage points**. The committed
+`did_binary_*` CSVs contain arm rates, OR and RD 95% CIs, and P values. Columns
+are MIMIC pooled, MIMIC G1, MIMIC G2, MIMIC G3+, and eICU pooled. eICU
+stratum-specific results are unavailable because the guard stop preceded that
+run.
+
+PSM:
+
+| Outcome | MIMIC pooled | MIMIC G1 | MIMIC G2 | MIMIC G3+ | eICU pooled |
+|---|---:|---:|---:|---:|---:|
+| KDIGO >=1, 48h | 1.77 / +11.78 | 1.40 / +6.02 | 1.89 / +13.49 | 2.11 / +18.49 | 1.32 / +4.70 |
+| KDIGO >=2, 48h | 1.79 / +2.08 | 1.46 / +1.24 | 1.59 / +1.71 | 1.25 / +1.13 | 1.29 / +0.74 |
+| KDIGO >=3, 48h | 2.74 / +0.66 | 4.02 / +0.48 | 4.01 / +0.18 | 0.77 / -0.96 | 0.91 / -0.11 |
+| KDIGO >=1, 7d | 1.68 / +11.52 | 1.41 / +6.94 | 1.59 / +10.56 | 2.15 / +18.88 | 1.30 / +4.85 |
+| KDIGO >=2, 7d | 1.61 / +2.94 | 1.09 / +0.47 | 2.04 / +4.57 | 1.82 / +5.60 | 1.32 / +1.36 |
+| KDIGO >=3, 7d | 1.44 / +0.81 | 1.08 / +0.09 | 1.51 / +0.54 | 0.87 / -1.04 | 0.93 / -0.16 |
+| Stage >=2 or RRT, 48h | 1.81 / +2.32 | 1.50 / +1.36 | 1.55 / +1.65 | 1.33 / +1.93 | 1.01 / +0.05 |
+| Stage >=2 or RRT, 7d | 1.64 / +3.22 | 1.11 / +0.56 | 2.04 / +4.64 | 1.89 / +6.85 | 1.17 / +0.98 |
+
+DR:
+
+| Outcome | MIMIC pooled | MIMIC G1 | MIMIC G2 | MIMIC G3+ | eICU pooled |
+|---|---:|---:|---:|---:|---:|
+| KDIGO >=1, 48h | 2.08 / +14.05 | 1.47 / +6.79 | 1.92 / +13.39 | 2.26 / +19.73 | 1.44 / +5.67 |
+| KDIGO >=2, 48h | 2.00 / +2.44 | 1.57 / +1.48 | 1.72 / +1.98 | 1.10 / +0.46 | 1.26 / +0.66 |
+| KDIGO >=3, 48h | 3.70 / +0.79 | 4.32 / +0.51 | 3.59 / +0.16 | 0.86 / -0.72 | 1.28 / +0.09 |
+| KDIGO >=1, 7d | 1.87 / +13.04 | 1.46 / +7.57 | 1.65 / +11.03 | 2.24 / +19.51 | 1.38 / +5.55 |
+| KDIGO >=2, 7d | 1.76 / +3.36 | 1.16 / +0.80 | 2.16 / +4.82 | 1.78 / +4.99 | 1.33 / +1.36 |
+| KDIGO >=3, 7d | 1.90 / +1.15 | 1.10 / +0.11 | 1.76 / +0.68 | 0.96 / -0.28 | 1.05 / -0.07 |
+| Stage >=2 or RRT, 48h | 2.12 / +2.85 | 1.62 / +1.61 | 1.68 / +1.93 | 1.32 / +1.86 | 1.03 / -0.04 |
+| Stage >=2 or RRT, 7d | 1.84 / +3.74 | 1.18 / +0.89 | 2.17 / +4.89 | 1.90 / +6.52 | 1.20 / +0.99 |
+
+The MIMIC KDIGO >=1 pattern increases from G1 through G3+ on both OR and RD
+scales. Severe-stage estimates are sparse and discordant, so they are not
+interpreted. eICU pooled directions are weaker and do not reproduce the MIMIC
+stage >=2-or-RRT magnitude. No interaction claim is available because HTE was
+not run.
+
+### Mortality falsification completed before the stop
+
+Point estimates are again OR / RD percentage points:
+
+| Outcome/method | MIMIC pooled | MIMIC G1 | MIMIC G2 | MIMIC G3+ | eICU pooled |
+|---|---:|---:|---:|---:|---:|
+| 48h all, PSM | 1.48 / +0.18 | not estimable | 11.06 / +0.53 | 3.25 / +1.40 | 1.78 / +1.39 |
+| 48h all, DR | 2.91 / +0.43 | not estimable | 17.31 / +0.64 | 5.49 / +1.64 | 2.11 / +1.42 |
+| 7d all, PSM | 0.71 / -0.50 | 2.34 / +0.29 | 0.95 / -0.05 | 0.73 / -1.53 | 1.08 / +0.46 |
+| 7d all, DR | 1.33 / +0.24 | 3.22 / +0.39 | 1.25 / +0.19 | 0.75 / -0.82 | 1.20 / +0.55 |
+
+MIMIC G1 48-hour estimates were suppressed by the prespecified sparse-event
+utility threshold. The committed CSVs also contain all never-treated and
+crossover-censored mortality diagnostics.
+
+The eICU 48-hour falsification is not null:
+
+| Method | OR (95% CI), P | RD percentage points (95% CI), P |
+|---|---|---|
+| PSM | 1.78 (1.17-2.69), P=.0067 | +1.39 (+0.40 to +2.37), P=.0060 |
+| DR | 2.11 (1.40-3.18), P=.00036 | +1.42 (+0.48 to +2.36), P=.0032 |
+
+At 7 days, eICU was closer to null: PSM OR 1.08 and RD +0.46 points; DR OR
+1.20 and RD +0.55 points, with both RD confidence intervals crossing zero.
+The non-null 48-hour RD is the main falsification guard event.
+
+### Required no-post-Cr probe
+
+| Database/stratum | Horizon | Treated | Control | Difference |
+|---|---|---:|---:|---:|
+| MIMIC pooled | 48h | 0.07% | 0.18% | -0.11 pp |
+| MIMIC pooled | 7d | 0.07% | 0.15% | -0.07 pp |
+| MIMIC G1 | 48h/7d | 0.04% | 0.07% | -0.04 pp |
+| MIMIC G2 | 48h/7d | 0.11% | 0.05% | +0.05 pp |
+| MIMIC G3+ | 48h/7d | 0.13% | 0.25% | -0.13 pp |
+| eICU pooled | 48h | 5.70% | 2.77% | **+2.93 pp** |
+| eICU pooled | 7d | 2.41% | 1.39% | **+1.03 pp** |
+
+MIMIC missingness is negligible. eICU missing-post-Cr is materially more common
+in the treated arm. The frozen non-event coding was retained; I did not drop
+members or add IPCW.
+
+### Additional eICU implementation caveat
+
+The current eICU covariate export contains `vent_eicu.csv` with APACHE
+`vent_day1`/`intub_day1` flags, not a timestamped ventilation interval at exact
+T0. The completed pooled run used that available proxy, as Entry 12 retained
+ventilation while dropping eICU vaso/MAP. Because many treated T0 values occur
+within day 1, the proxy may incorporate information after T0. This makes the
+eICU pooled result provisional and requires an explicit supervisor decision
+before further eICU or HTE execution; I did not invent a replacement
+operationalization from respiratoryCare/treatment tables.
+
+### DECISION NEEDED
+
+Two linked questions block the remaining main experiment:
+
+1. Is the non-null eICU 48-hour mortality RD and +2.93-point differential
+   no-post-Cr rate accepted as a database limitation, or does it require a
+   prespecified diagnostic/design response before eICU stratification?
+2. For eICU ventilation, should the main model use the available APACHE day-1
+   proxy, omit ventilation, or authorize a new strict-pre-T0 raw-table
+   operationalization?
+
+Recommendation: do not interpret or extend the eICU result until the
+ventilation timing is resolved. Preserve the frozen non-event outcome coding
+and logistic PS; do not select a response based on the AKI estimate.
+
+### Artifacts
+
+Aggregate, committed:
+
+- `did_riskset_pooled_mimic.csv`, `did_riskset_egfr_mimic.csv`,
+  `did_riskset_pooled_eicu.csv`;
+- matching `psm_balance_*` files;
+- matching `did_binary_*` files with OR and RD;
+- `probe_nopost_cr_pooled_mimic.csv`,
+  `probe_nopost_cr_egfr_mimic.csv`,
+  `probe_nopost_cr_pooled_eicu.csv`.
+
+Patient-level, Tempest only:
+
+- all three corresponding `did_pairs_primary_yet_untreated_*` files.
+
+No stale pre-v3.2 HTE output is being reported as a new result.
+
+### State block
+
+- Frozen: design v3.2, S2 primary, m=20, fixed-window mortality RD primary.
+- Completed: MIMIC pooled, MIMIC eGFR-stratified, eICU pooled, and their
+  no-post-Cr probes.
+- Pending and not run: eICU eGFR-stratified, MIMIC/eICU HTE, optional S3.
+- Stop reason: non-null eICU 48h mortality RD, differential eICU post-Cr
+  ascertainment, and unresolved eICU ventilation timing.
+
+>>> GUARD-RAIL STOP. Awaiting supervisor direction before eICU-stratified matching or HTE. <<<
+
+---
+
+## Entry 12b — Supervisor: add surg_aortic + unify baseline timing to "@T0" (Yan clinical input)  (2026-07-18, Claude)
+
+(Recording now — this was agreed with Dr. Yan verbally; it had not actually been written to this log. This entry is the authoritative record and amends Entry 12.)
+
+**1. Add `surg_aortic` — only this one; nothing deleted.** Frozen primary becomes **S2 + surg_aortic = 23
+covariates**; the surgery-type block is now cabg / valve / combined / **aortic**. Include in **both**
+databases (MIMIC ~7.3% via ICD; eICU ~2.9% via admission dx). It is pre-T0, time-invariant, code-derived,
+**no imputation** — so it will not reproduce the S3+ m=5 balance artifact — and it completes the
+surgery-type taxonomy mg already used. Yan's hypothesis (imbalance is partly because aortic-surgery
+patients get more albumin) is **testable**: the run must report surg_aortic's raw treated-vs-control
+imbalance and whether adding it **reduces** max SMD / #violations vs S2-without-aortic.
+
+**2. Unify baseline-covariate timing to a single "@T0" convention.** All baseline covariates are the
+**most recent value at or before T0** (first-albumin time); treatment-status covariates (vasopressor,
+ventilation) are **status at T0**. The mixed labels (`last_*`, `*_before_t0`, `*_at_t0`) all denote the
+same timing — `last before T0` ≡ `at T0` — so relabel them uniformly to "@T0" in `STUDY_DESIGN.md` and
+all tables, and state the convention in Methods (this pre-empts the reviewer question "why is one t0 and
+another last"). **This is a labeling/documentation change; values must not change.** If any relabel
+changes a number, STOP and report — that means the constructs were not actually identical. The
+earliest-ICU-value variant remains the `sens_b` lab-timing sensitivity, labeled "earliest ICU value"
+(not "first"/"last").
+
+**3. Verify `hemoglobin` conforms to @T0** (Haining flagged it): confirm from the ETL that hemoglobin is
+the most-recent-at/before-T0 value like the other labs; report; only then relabel it under the convention.
+
+`STUDY_DESIGN.md` → **v3.2** (surg_aortic in the surgery block; the @T0 timing convention documented).
+S0/S1 and **S2-without-aortic** are sensitivities; S3–S5 excluded; falsification = fixed-window RD primary.
+
+>>> Amended freeze: primary = S2 + surg_aortic (23 cov), all baseline covariates labeled @T0. Proceed to the m=20 full run per the updated prompt. <<<
