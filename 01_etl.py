@@ -217,6 +217,12 @@ def save_consort(consort, db_tag):
             "control_final",
             "control_has_2cr",
         ),
+        (
+            "descriptive",
+            "treated_prevalent_aki_at_own_t0_not_excluded",
+            "treated_prevalent_aki_own_t0",
+            None,
+        ),
     ]
     rows = []
     for order, (branch, step, key, previous_key) in enumerate(specs, start=1):
@@ -527,21 +533,23 @@ def run_eicu():
     has_cr_pre = set(cr_pre_last.patientunitstayid)
     consort["treated_has_cr_pre"] = len(has_cr_pre)
 
-    # Hospital admission fallback
+    # Hospital-admission fallback, computed for every cardiac patient.
     hosp_off = cardiac.set_index("patientunitstayid")["hospitaladmitoffset"].to_dict()
-    cr_t["hosp_off"] = cr_t.patientunitstayid.map(hosp_off)
-    cr_h = cr_t[
-        (cr_t.labresultoffset >= cr_t.hosp_off - 360)
-        & (cr_t.labresultoffset <= cr_t.hosp_off + 360)
-        & (cr_t.labresultoffset < 0)
+    cr_h_all = cr.copy()
+    cr_h_all["hosp_off"] = cr_h_all.patientunitstayid.map(hosp_off)
+    cr_h_all = cr_h_all[
+        (cr_h_all.labresultoffset >= cr_h_all.hosp_off - 360)
+        & (cr_h_all.labresultoffset <= cr_h_all.hosp_off + 360)
+        & (cr_h_all.labresultoffset < 0)
     ].copy()
-    cr_h["_dist"] = (cr_h.labresultoffset - cr_h.hosp_off).abs()
-    cr_hosp = (
-        cr_h.sort_values(["patientunitstayid", "_dist"])
+    cr_h_all["_dist"] = (cr_h_all.labresultoffset - cr_h_all.hosp_off).abs()
+    cr_hosp_all = (
+        cr_h_all.sort_values(["patientunitstayid", "_dist"])
         .groupby("patientunitstayid")
         .first()
         .reset_index()
     )
+    cr_hosp = cr_hosp_all[cr_hosp_all.patientunitstayid.isin(treated_pids - has_cr_pre)]
     rescue_pids = set(cr_hosp.patientunitstayid) - has_cr_pre
     n_rescue = len(rescue_pids & treated_pids)
     consort["treated_hosp_fallback"] = n_rescue
@@ -601,6 +609,73 @@ def run_eicu():
     keep_control = c2 - c_excl
     consort["control_final"] = len(keep_control)
 
+    # Early reference for prevalent-AKI-at-index screening in Phase 3.
+    # For treated patients, the early ICU value must not occur after own T0;
+    # otherwise use the same admit-window fallback. Controls receive their
+    # earliest ICU reference now and are screened at the matched T0 later.
+    final_ids = keep_treated | keep_control
+    early_ref = cr_first[cr_first.patientunitstayid.isin(final_ids)][
+        ["patientunitstayid", "labresult", "labresultoffset"]
+    ].copy()
+    t0_map = first_alb.set_index("patientunitstayid")["alb_offset_min"].to_dict()
+    early_ref["_own_t0"] = early_ref.patientunitstayid.map(t0_map)
+    invalid_treated = early_ref._own_t0.notna() & (
+        early_ref.labresultoffset > early_ref._own_t0
+    )
+    replace_ids = set(early_ref.loc[invalid_treated, "patientunitstayid"])
+    early_ref = early_ref[~early_ref.patientunitstayid.isin(replace_ids)]
+    early_fb = cr_hosp_all[
+        cr_hosp_all.patientunitstayid.isin(final_ids - set(early_ref.patientunitstayid))
+    ][["patientunitstayid", "labresult", "labresultoffset"]].copy()
+    early_ref = pd.concat(
+        [
+            early_ref[["patientunitstayid", "labresult", "labresultoffset"]].assign(
+                cr_ref_early_source="icu_earliest"
+            ),
+            early_fb.assign(cr_ref_early_source="admit_window_fallback"),
+        ],
+        ignore_index=True,
+    ).rename(
+        columns={
+            "labresult": "cr_ref_early",
+            "labresultoffset": "cr_ref_early_offset_min",
+        }
+    )
+    early_ref["cr_ref_early_offset_h"] = early_ref.cr_ref_early_offset_min / 60.0
+    if set(early_ref.patientunitstayid) != final_ids:
+        missing = len(final_ids - set(early_ref.patientunitstayid))
+        raise RuntimeError(f"cr_ref_early missing for {missing} final eICU patients")
+
+    trt_ref = early_ref[early_ref.patientunitstayid.isin(keep_treated)].merge(
+        first_alb[["patientunitstayid", "alb_offset_min"]], on="patientunitstayid"
+    )
+    pre_window = cr.merge(
+        trt_ref[
+            [
+                "patientunitstayid",
+                "cr_ref_early",
+                "cr_ref_early_offset_min",
+                "alb_offset_min",
+            ]
+        ],
+        on="patientunitstayid",
+    )
+    pre_window = pre_window[
+        (pre_window.labresultoffset > pre_window.cr_ref_early_offset_min)
+        & (pre_window.labresultoffset <= pre_window.alb_offset_min)
+    ]
+    prevalent_ids = set(
+        pre_window[
+            (pre_window.labresult - pre_window.cr_ref_early >= 0.3)
+            | (pre_window.labresult / pre_window.cr_ref_early >= 1.5)
+        ].patientunitstayid
+    )
+    consort["treated_prevalent_aki_own_t0"] = len(prevalent_ids)
+    print(
+        f"  Descriptive prevalent AKI at treated own T0: {len(prevalent_ids):,} "
+        f"/ {len(keep_treated):,} (not excluded)"
+    )
+
     # ── Build treated ─────────────────────────────────────────────
     print(f"\n  Building treated: {len(keep_treated):,}")
     treated = cardiac[cardiac.patientunitstayid.isin(keep_treated)].copy()
@@ -624,6 +699,18 @@ def run_eicu():
                 "baseline_cr",
                 "baseline_cr_offset_h",
                 "baseline_cr_source",
+            ]
+        ],
+        on="patientunitstayid",
+        how="left",
+    )
+    treated = treated.merge(
+        early_ref[
+            [
+                "patientunitstayid",
+                "cr_ref_early",
+                "cr_ref_early_offset_h",
+                "cr_ref_early_source",
             ]
         ],
         on="patientunitstayid",
@@ -704,6 +791,18 @@ def run_eicu():
                 "baseline_cr",
                 "baseline_cr_offset_h",
                 "baseline_cr_source",
+            ]
+        ],
+        on="patientunitstayid",
+        how="left",
+    )
+    control = control.merge(
+        early_ref[
+            [
+                "patientunitstayid",
+                "cr_ref_early",
+                "cr_ref_early_offset_h",
+                "cr_ref_early_source",
             ]
         ],
         on="patientunitstayid",
@@ -1079,13 +1178,14 @@ def run_mimic():
     adm_times.admittime = pd.to_datetime(adm_times.admittime)
     cr_hadm = cr.merge(adm_times, on="hadm_id", how="left")
     cr_hadm["pre_adm"] = cr_hadm.charttime < cr_hadm.admittime
-    hosp_cr = (
-        cr_hadm[cr_hadm.pre_adm & cr_hadm.stay_id.isin(treated_stays - has_cr)]
+    hosp_cr_all = (
+        cr_hadm[cr_hadm.pre_adm]
         .sort_values("charttime", ascending=False)
         .groupby("stay_id")
         .first()
         .reset_index()
     )
+    hosp_cr = hosp_cr_all[hosp_cr_all.stay_id.isin(treated_stays - has_cr)]
     rescue = set(hosp_cr.stay_id)
     consort["treated_hosp_fallback"] = len(rescue)
     has_cr |= rescue
@@ -1121,6 +1221,62 @@ def run_mimic():
     keep_control = c2 - c_excl
     consort["control_final"] = len(keep_control)
 
+    # Early reference for prevalent-AKI-at-index screening in Phase 3.
+    final_ids = keep_treated | keep_control
+    early_ref = cr_first[cr_first.stay_id.isin(final_ids)][
+        ["stay_id", "valuenum", "offset_h"]
+    ].copy()
+    t0_map = first_alb.set_index("stay_id")["alb_offset_h"].to_dict()
+    early_ref["_own_t0"] = early_ref.stay_id.map(t0_map)
+    invalid_treated = early_ref._own_t0.notna() & (
+        early_ref.offset_h > early_ref._own_t0
+    )
+    replace_ids = set(early_ref.loc[invalid_treated, "stay_id"])
+    early_ref = early_ref[~early_ref.stay_id.isin(replace_ids)]
+    early_fb = hosp_cr_all[
+        hosp_cr_all.stay_id.isin(final_ids - set(early_ref.stay_id))
+    ][["stay_id", "valuenum", "offset_h"]].copy()
+    early_ref = pd.concat(
+        [
+            early_ref[["stay_id", "valuenum", "offset_h"]].assign(
+                cr_ref_early_source="icu_earliest"
+            ),
+            early_fb.assign(cr_ref_early_source="admit_window_fallback"),
+        ],
+        ignore_index=True,
+    ).rename(
+        columns={
+            "valuenum": "cr_ref_early",
+            "offset_h": "cr_ref_early_offset_h",
+        }
+    )
+    if set(early_ref.stay_id) != final_ids:
+        missing = len(final_ids - set(early_ref.stay_id))
+        raise RuntimeError(f"cr_ref_early missing for {missing} final MIMIC patients")
+
+    trt_ref = early_ref[early_ref.stay_id.isin(keep_treated)].merge(
+        first_alb[["stay_id", "alb_offset_h"]], on="stay_id"
+    )
+    pre_window = cr.merge(
+        trt_ref[["stay_id", "cr_ref_early", "cr_ref_early_offset_h", "alb_offset_h"]],
+        on="stay_id",
+    )
+    pre_window = pre_window[
+        (pre_window.offset_h > pre_window.cr_ref_early_offset_h)
+        & (pre_window.offset_h <= pre_window.alb_offset_h)
+    ]
+    prevalent_ids = set(
+        pre_window[
+            (pre_window.valuenum - pre_window.cr_ref_early >= 0.3)
+            | (pre_window.valuenum / pre_window.cr_ref_early >= 1.5)
+        ].stay_id
+    )
+    consort["treated_prevalent_aki_own_t0"] = len(prevalent_ids)
+    print(
+        f"  Descriptive prevalent AKI at treated own T0: {len(prevalent_ids):,} "
+        f"/ {len(keep_treated):,} (not excluded)"
+    )
+
     # ── Build treated ─────────────────────────────────────────────
     print(f"\n  Building treated: {len(keep_treated):,}")
     treated = cardiac[cardiac.stay_id.isin(keep_treated)].copy()
@@ -1140,6 +1296,13 @@ def run_mimic():
     treated = treated.merge(
         treated_baseline[
             ["stay_id", "baseline_cr", "baseline_cr_offset_h", "baseline_cr_source"]
+        ],
+        on="stay_id",
+        how="left",
+    )
+    treated = treated.merge(
+        early_ref[
+            ["stay_id", "cr_ref_early", "cr_ref_early_offset_h", "cr_ref_early_source"]
         ],
         on="stay_id",
         how="left",
@@ -1203,6 +1366,13 @@ def run_mimic():
     control = control.merge(
         control_baseline[
             ["stay_id", "baseline_cr", "baseline_cr_offset_h", "baseline_cr_source"]
+        ],
+        on="stay_id",
+        how="left",
+    )
+    control = control.merge(
+        early_ref[
+            ["stay_id", "cr_ref_early", "cr_ref_early_offset_h", "cr_ref_early_source"]
         ],
         on="stay_id",
         how="left",

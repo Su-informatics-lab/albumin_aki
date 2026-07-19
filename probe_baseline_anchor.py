@@ -23,7 +23,15 @@ def main(db):
     cohort = pd.read_csv(os.path.join(cfg.RESULTS, f"did_all_{db}.csv"))
     cr = pd.read_csv(os.path.join(cfg.RESULTS, f"did_cr_all_{db}.csv"))
     cr = cr.rename(columns={"stay_id": "pid", "patientunitstayid": "pid"})
-    required = {"baseline_cr", "baseline_cr_offset_h", "baseline_cr_source", "egfr"}
+    required = {
+        "baseline_cr",
+        "baseline_cr_offset_h",
+        "baseline_cr_source",
+        "cr_ref_early",
+        "cr_ref_early_offset_h",
+        "cr_ref_early_source",
+        "egfr",
+    }
     assert required.issubset(
         cohort.columns
     ), f"FAIL: missing {sorted(required - set(cohort.columns))}"
@@ -46,6 +54,13 @@ def main(db):
     assert set(controls.baseline_cr_source) == {
         "icu_first_reference"
     }, "FAIL: controls mislabeled as preoperative"
+    assert set(cohort.cr_ref_early_source) <= {
+        "icu_earliest",
+        "admit_window_fallback",
+    }, "FAIL: unexpected early-reference tier"
+    assert (
+        treated.cr_ref_early_offset_h <= treated.alb_offset_h
+    ).all(), "FAIL: treated early reference after own T0"
 
     expected = (
         cfg.compute_egfr(cohort.baseline_cr, cohort.age, cohort.is_female)
@@ -82,6 +97,37 @@ def main(db):
     assert found == set(
         cohort.pid
     ), "FAIL: baseline value/timestamp not traceable to timestamped Cr"
+    early_merged = cohort[["pid", "cr_ref_early", "cr_ref_early_offset_h"]].merge(
+        cr[["pid", "labresult", "offset_h"]], on="pid", how="left"
+    )
+    early_exact = np.isclose(
+        early_merged.cr_ref_early, early_merged.labresult
+    ) & np.isclose(early_merged.cr_ref_early_offset_h, early_merged.offset_h)
+    assert set(early_merged.loc[early_exact, "pid"]) == set(
+        cohort.pid
+    ), "FAIL: early reference not traceable to timestamped Cr"
+
+    treated_cr = cr.merge(
+        treated[
+            [
+                "pid",
+                "alb_offset_h",
+                "cr_ref_early",
+                "cr_ref_early_offset_h",
+            ]
+        ],
+        on="pid",
+    )
+    pre = treated_cr[
+        (treated_cr.offset_h > treated_cr.cr_ref_early_offset_h)
+        & (treated_cr.offset_h <= treated_cr.alb_offset_h)
+    ]
+    prevalent = set(
+        pre[
+            (pre.labresult - pre.cr_ref_early >= 0.3)
+            | (pre.labresult / pre.cr_ref_early >= 1.5)
+        ].pid
+    )
     print(
         "source_counts="
         + str(cohort.groupby(["treated", "baseline_cr_source"]).size().to_dict())
@@ -105,7 +151,17 @@ def main(db):
     print(
         f"prevalent_severe_renal_screen_baseline_ge_4=0; fallback_n={(cohort.baseline_cr_source == 'admit_window_fallback').sum():,}"
     )
-    print("PASS: baseline value, tier, timing, raw-stream trace, and eGFR invariants")
+    print(
+        "early_reference_source_counts="
+        + str(cohort.cr_ref_early_source.value_counts().to_dict())
+    )
+    print(
+        f"treated_prevalent_aki_at_own_t0={len(prevalent):,}/{len(treated):,} "
+        "(descriptive only; not excluded)"
+    )
+    print(
+        "PASS: two-reference values, tiers, timing, raw-stream trace, and eGFR invariants"
+    )
 
 
 if __name__ == "__main__":

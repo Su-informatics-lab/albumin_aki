@@ -309,6 +309,9 @@ ALL_PATIENTS_COLS = [
     "baseline_cr",
     "baseline_cr_offset_h",
     "baseline_cr_source",
+    "cr_ref_early",
+    "cr_ref_early_offset_h",
+    "cr_ref_early_source",
     "first_cr",  # compatibility alias of baseline_cr until the Phase 3 repair
     "egfr",
     *CHRONIC_DRUG_CLASSES.keys(),
