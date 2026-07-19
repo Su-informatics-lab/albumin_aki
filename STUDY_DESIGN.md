@@ -1,6 +1,6 @@
 # Albumin and Cardiac-Surgery AKI: Frozen Main-Experiment Design
 
-- **Design version:** 3.0
+- **Design version:** 3.1
 - **Freeze date:** 2026-07-18
 - **Status:** **FROZEN BEFORE OUTCOME ANALYSIS**
 - **Canonical estimator:** `02_psm.R`
@@ -10,6 +10,11 @@ Any change to this document after the freeze requires a new version, a written
 rationale in `JOURNAL.md`, and supervisor approval before rerunning outcomes.
 The 24-hour ICU-admission landmark script, `02b_landmark_sensitivity.R`, is
 deferred and is not part of the main experiment.
+
+Version 3.1 is a documented falsification amendment authorized after the first
+MIMIC pooled run exposed an alive-at-T0 eligibility bug and immortal-time bias
+in whole-stay mortality. It does not change the AKI estimand, matching ratio,
+replacement rule, MICE, HC1, DR rule, trigger category, or creatinine outcomes.
 
 ## 1. Question and estimand
 
@@ -128,6 +133,38 @@ stage >=2 or new RRT through the corresponding horizon, with the prespecified
 
 Hospital mortality is the falsification outcome and is reported, not promoted
 as efficacy evidence.
+
+### Version 3.1 mortality amendment
+
+Every treated and control member must be alive at the relevant T0:
+`death_offset_h` is missing or strictly greater than T0. Mortality
+falsification is death within 48 hours and within 7 days after T0, aligned to
+the AKI windows. For both horizons report three prespecified diagnostics:
+
+1. all matched controls;
+2. never-treated controls only;
+3. later-treated controls censored at crossover.
+
+Whole-stay hospital mortality is descriptive only and is not the
+falsification test.
+
+### Version 3.1 covariate sweep
+
+Before releasing eGFR-stratified or eICU analyses, MIMIC pooled evaluates the
+ordered, cumulative, strictly pre-index registry:
+
+- S0: frozen magnesium-base set;
+- S1: S0 plus aortic surgery;
+- S2: S1 plus ventilation status at T0;
+- S3: S2 plus vasopressor status at T0;
+- S4: S3 plus last MAP before T0;
+- S5: S4 plus last platelet, INR, BUN, bicarbonate, sodium, and hematocrit
+  before T0.
+
+Selection is prespecified on improved balance and mortality falsification
+moving toward null, never on the AKI estimate. Every binary outcome is reported
+as both OR and absolute risk difference with HC1 confidence intervals and P
+values. The full sweep is retained as a transparency analysis.
 
 ## 6. Prespecified analyses and reporting
 
