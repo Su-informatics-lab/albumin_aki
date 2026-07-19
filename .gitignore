@@ -12,6 +12,7 @@ results/did_binary_pairs_*.csv
 !results/probe_mortality_*.csv
 !results/covariate_sweep_*.csv
 !results/probe_sweep_eligibility_*.csv
+!results/probe_sweep_balance_*.csv
 logs/
 *.csv.gz
 __pycache__/

@@ -218,7 +218,11 @@ treated_ok <- treated_all[
 cat(sprintf("  treated eligible: %d/%d\n", length(treated_ok),
             length(treated_all)))
 
-RUN_SETS <- paste0("S", 0:5)
+PROBE_SET <- Sys.getenv("PROBE_SET", "")
+RUN_SETS <- if (nzchar(PROBE_SET)) PROBE_SET else paste0("S", 0:5)
+if (!all(RUN_SETS %in% names(COVARIATE_SETS))) {
+  stop("Unknown PROBE_SET: ", paste(RUN_SETS, collapse = ","))
+}
 union_vars <- unique(unlist(COVARIATE_SETS[RUN_SETS]))
 union_vars <- usable_vars(all_pts, union_vars)
 imputed <- prepare_imputations(all_pts, union_vars)
@@ -299,6 +303,25 @@ for (set_name in RUN_SETS) {
   cat(sprintf("  %s matched %d/%d (%.1f%%), max SMD %.3f, viol %d\n",
               set_name, nrow(pairs), length(treated_ok),
               100 * match_rate, max_smd, length(violations)))
+  if (nzchar(PROBE_SET)) {
+    balance_probe <- data.frame(
+      set = set_name, variable = names(smds), smd = as.numeric(smds),
+      matched = nrow(pairs), eligible = length(treated_ok),
+      match_rate = match_rate, max_smd = max_smd,
+      n_viol = length(violations), mice_m = M_IMP,
+      mice_logged_events = imputed$logged_events
+    )
+    write.csv(
+      balance_probe,
+      file.path(
+        RESULTS,
+        sprintf("probe_sweep_balance_%s_mimic.csv", set_name)
+      ),
+      row.names = FALSE
+    )
+    cat(sprintf("  probe-only balance written for %s\n", set_name))
+    quit(save = "no", status = 0)
+  }
   pair_outcomes <- make_outcomes(pairs, analysis, cr_list)
   for (outcome in binary_outcomes) {
     for (method in c("psm", "dr")) {
