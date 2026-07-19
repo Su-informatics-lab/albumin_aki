@@ -797,3 +797,117 @@ Freeze `STUDY_DESIGN.md` and commit it **before** the production run (anti estim
 sens_a/b, PS-2, LLM (Phase 6), and IUH (Phase 7) remain deferred to their later gates — main experiment only.
 
 >>> Phase 2 + Phase 3 (main experiment) APPROVED. Freeze before run. Stop at the Phase 3 results gate. <<<
+
+---
+
+## Entry 5 — Guard-rail STOP during Step A data addendum  (2026-07-18, Codex)
+
+### Status
+
+**STOPPED before the Phase 2 freeze and before every analysis run.** The approved two-reference
+columns and descriptive treated own-T0 prevalent-AKI count were implemented and asserted, but the
+eICU rerun changed the final control count from 16,779 to 16,778. Per the explicit hard-stop rule, I
+wrote and ran an aggregate-only probe rather than selecting a tie rule or continuing to PSM.
+
+No `02_psm.R`, `03_hte.R`, landmark, sensitivity, PS-2, LLM, or IUH command was run.
+
+### Commits before the stop
+
+- `0b64a6a` — `docs: authorize mirror-mg main experiment` (Entries 4/4b/4c + aligned directives).
+- `ab77571` — `phase1: export early creatinine reference`.
+- `728b9fd` — `probe: diagnose eICU control count drift`.
+
+### Step A implementation
+
+- Added `cr_ref_early`, `cr_ref_early_offset_h`, and `cr_ref_early_source` to `did_all_*`.
+- `cr_ref_early` is the earliest qualifying ICU Cr; when a treated patient's earliest ICU Cr occurs
+  after own T0, the admit-window fallback is used.
+- Kept `baseline_cr` unchanged as last-pre-own-T0 (admit-window fallback).
+- Added a descriptive CONSORT row for treated prevalent AKI at own T0. No patient was excluded.
+- Updated `probe_baseline_anchor.py` to assert both reference values/timestamps trace to the
+  timestamped Cr stream and that treated early references are not after own T0.
+
+### Commands run on Tempest
+
+```bash
+source /etc/profile.d/modules.sh
+cd ~/albumin_aki
+module purge
+module load Python/3.10.8-GCCcore-12.2.0
+source ~/alcrx/.venv/bin/activate
+python 01_etl.py mimic 2>&1 | tee logs/01_etl_mimic_cr_ref.log
+python 01_etl.py eicu 2>&1 | tee logs/01_etl_eicu_cr_ref.log
+python probe_eicu_control_count_drift.py 2>&1 | tee logs/probe_eicu_control_count_drift.log
+python probe_baseline_anchor.py mimic 2>&1 | tee logs/probe_baseline_mimic_cr_ref.log
+python probe_baseline_anchor.py eicu 2>&1 | tee logs/probe_baseline_eicu_cr_ref.log
+```
+
+### Two-reference assertion results
+
+| Database | Final treated | Final control | Early ICU tier | Early fallback tier | Treated prevalent AKI at own T0 | Result |
+|---|---:|---:|---:|---:|---:|---|
+| MIMIC | 5,771 | 6,889 | 12,658 | 2 | 343 (5.9%) | PASS |
+| eICU | 2,298 | 16,778 | 18,482 | 594 | 222 (9.7%) | PASS |
+
+Both databases passed value, source-tier, timing, timestamped-stream traceability, and eGFR
+invariants. The prevalent counts are descriptive only.
+
+### Surprise 1 — eICU final control count drift
+
+Prior accepted count: **16,779**. Current rerun: **16,778**. Upstream control Cr eligibility stayed
+fixed at 17,149, so the change occurs at the earliest-reference Cr `<4.0` screen.
+
+`probe_eicu_control_count_drift.py` reconstructed the raw eICU cohort and emitted:
+
+```text
+post_eskd=25,822
+control_no_iv_albumin=22,044
+control_has_2cr=17,149
+earliest_offset_tied_patients=72
+threshold_discordant_ties=2
+eligible_if_tie_min_cr=16,780
+excluded_if_tie_max_cr=371
+GUARD-RAIL HIT
+```
+
+**Cause:** 72 eligible controls have multiple Cr rows at their earliest ICU timestamp; for 2
+patients those simultaneous values straddle the frozen `4.0 mg/dL` threshold. The current
+`sort_values(offset).groupby().first()` has no deterministic or clinically approved tie rule.
+Depending on tie ordering, the final control count can be 16,778–16,780.
+
+### Surprise 2 — eICU CONSORT exposure row includes pre-excluded ESKD stays
+
+The probe found **3,778** accepted albumin patients after the ESKD exclusion, while ETL CONSORT
+reports **3,991**. The 213 difference occurs because medication rows were loaded before ESKD
+exclusion and the medication exposure frame is not re-filtered to the post-ESKD `pids`; the
+intakeOutput frame is. `control_no_iv_albumin=22,044` and the final treated cohort are unaffected,
+but the treated branch's CONSORT starting row is mislabeled/internally inconsistent.
+
+### DECISION NEEDED — exact tie rule and permission for the CONSORT bug fix
+
+1. **Earliest-Cr timestamp ties crossing 4.0**
+   - A: use the maximum qualifying Cr at the earliest timestamp (conservative eligibility screen;
+     final eICU controls expected 16,778).
+   - B: use the minimum qualifying Cr (final expected 16,780).
+   - C: preserve raw source order with a stable sort (closest to mg's current intent, but clinically
+     arbitrary and likely final 16,778 or 16,779 depending on source order).
+   - **Codex recommendation: A.** When simultaneous values disagree across an exclusion threshold,
+     retaining the higher value avoids admitting severe baseline renal dysfunction; apply the same
+     deterministic rule to both databases and both early/reference selections.
+2. **Post-ESKD exposure CONSORT**
+   - Approve re-filtering medication-derived albumin rows to post-ESKD `pids`, matching intakeOutput.
+   - **Codex recommendation: approve.** This repairs an audit-flow bug without changing final
+     treated/control eligibility.
+
+After approval: patch only these two data-layer issues, rerun both ETLs and probes, commit reviewed
+aggregate CONSORT files, then perform the already-authorized Phase 2 freeze and Phase 3 main
+experiment.
+
+### Artifact discipline
+
+- Patient-level refreshed `did_all_*`, `did_cr_all_*`, and `did_labs_all_*` remain on Tempest.
+- No refreshed CONSORT CSV was copied or committed because the eICU count is unresolved.
+- The aggregate-only diagnostic probe is committed.
+- `codex_kickoff_prompt.md` remains untracked.
+
+>>> STOP. Awaiting supervisor decision on the earliest-Cr tie rule and eICU CONSORT exposure fix. <<<
