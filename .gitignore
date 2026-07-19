@@ -13,6 +13,7 @@ results/did_binary_pairs_*.csv
 !results/covariate_sweep_*.csv
 !results/probe_sweep_eligibility_*.csv
 !results/probe_sweep_balance_*.csv
+!results/probe_at_t0_identity.csv
 logs/
 *.csv.gz
 __pycache__/

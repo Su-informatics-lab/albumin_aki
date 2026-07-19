@@ -1,0 +1,10 @@
+"db","variable","n_patients","n_old_observed","n_at_or_before_observed","n_values_changed","max_abs_change"
+"mimic","albumin@T0",12660,5171,5795,738,1.5
+"mimic","lactate@T0",12660,9621,9721,161,2.9
+"mimic","heartrate@T0",12660,12247,12280,1213,48
+"mimic","hemoglobin@T0",12660,9726,12367,6481,5.8
+"mimic","MAP@T0",12660,12164,12201,1427,124
+"eicu","albumin@T0",19076,7884,10914,5129,39.4
+"eicu","lactate@T0",19076,1997,2704,836,7.5
+"eicu","heartrate@T0",19076,17144,17259,2094,73
+"eicu","hemoglobin@T0",19076,5902,16130,13051,92.9

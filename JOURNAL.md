@@ -1780,3 +1780,132 @@ the most-recent-at/before-T0 value like the other labs; report; only then relabe
 S0/S1 and **S2-without-aortic** are sensitivities; S3–S5 excluded; falsification = fixed-window RD primary.
 
 >>> Amended freeze: primary = S2 + surg_aortic (23 cov), all baseline covariates labeled @T0. Proceed to the m=20 full run per the updated prompt. <<<
+
+---
+
+## Entry 14 — Supervisor review of Entry 13 (m=20 partial): MIMIC is the paper; eICU is under-adjusted  (2026-07-19, Claude)
+
+(Entry 13 ran on the pre-Entry-12b S2, 22 cov, no surg_aortic/@T0 relabel. It appears above Entry 12b in
+the file due to interleaved appends; numbering/date is the source of truth.)
+
+**MIMIC (m=20) is clean and strong — this is the headline.**
+- AKI harm robust: KDIGO≥1 48h DR OR 2.08 (RD +14 pp); stage≥2-or-RRT 7d DR OR 1.84 (RD +3.7 pp).
+- **Monotonic eGFR gradient** (DR, KDIGO≥1 48h): G1 1.47 / +6.8 pp → G2 1.92 / +13.4 pp → G3+ 2.26 / +19.7 pp.
+  Harm is present everywhere and **escalates as renal reserve falls** — a clean, clinically sensible
+  effect modification (a gradient, not mg's sign reversal). This needs the **formal interaction test (HTE)**.
+- Mortality falsification ~null on RD (pooled 48h RD +0.43 pp, 7d +0.24 pp); the big stratum ORs (G2 17.3)
+  sit on trivial RDs — sparse-cell noise, per the RD-first rule. No-post-Cr negligible (|diff|<0.13 pp).
+
+**eICU is compromised by under-adjustment — its failure is a data-limitation signal, not a refutation.**
+- Falsification fails at 48h (mortality RD +1.4 pp, harmful, significant) and treated are markedly more
+  missing post-Cr (+2.93 pp). Both trace to the same cause: eICU **cannot adjust the resuscitation-severity
+  axis** — vaso/MAP are absent (informative missingness) and the ventilation covariate is an **APACHE day-1
+  proxy that can post-date T0** (contaminated). So residual confounding leaves the eICU treated arm sicker
+  → more early death + more missing Cr. Note the treated-missingness biases eICU AKI **toward null** (non-event
+  coding), which partly explains why eICU's AKI signal is weaker than MIMIC's — the harm there is if anything
+  understated, not inflated.
+
+### Decisions (answering Codex's two questions)
+
+1. **eICU ventilation → OMIT** the APACHE day-1 proxy (it violates strict pre-T0; a contaminated covariate
+   is worse than none). Do **not** build a new eICU vent operationalization now (eICU vent is unreliable —
+   state as a limitation). eICU PS = clean strictly-pre-T0 set (base + surg_aortic; no vaso/MAP/vent).
+2. **eICU status → documented limitation AND a response.** Re-run eICU clean (vent omitted), report it, but
+   **demote eICU to supplementary/limited** (under-adjusted; 48h falsification non-null; differential
+   treated missingness). It is directional support at best, not co-primary. **The real external validation is
+   IUH on Quartz (Phase 7)**, which has MIMIC-grade hemodynamics. Add an eICU **under-adjustment diagnostic**
+   (treated-vs-control baseline severity on available axes; flag vaso/MAP unmeasured) and an optional eICU
+   **complete-case AKI sensitivity** (to show treated-missingness dilutes, not inflates, the harm).
+3. **Run the MIMIC HTE now** — the formal treatment×eGFR interaction is the headline; do not block it on eICU.
+4. **Fold in Yan's Entry 12b** (surg_aortic + @T0) and re-run everything on one unified set so there is a
+   single frozen definition. `STUDY_DESIGN.md` → **v3.3**.
+
+### Release
+
+Freeze v3.3 (23-cov S2+aortic, @T0 naming, eICU vent omitted). Re-run at m=20: **MIMIC pooled + eGFR-stratified
++ HTE** (headline) and **eICU (clean) pooled + eGFR-stratified + HTE** (supplementary). Report Entry 15 and
+STOP. Then IUH external validation (Phase 7) + manuscript scaffold.
+
+>>> APPROVED: omit eICU vent; freeze v3.3 (S2+aortic, @T0); MIMIC primary + HTE, eICU supplementary; run m=20; stop at Entry 15. <<<
+
+---
+
+## Entry 15 — Pre-run `@T0` identity verification: GUARD-RAIL STOP (2026-07-19, Codex)
+
+### Outcome
+
+The Entry 12b verification condition failed before the v3.3 freeze and before
+any outcome model was run. Interpreting “at T0” literally as the most recent
+value at or before T0 (`offset_h <= index_h`) is not a names-only relabel of
+the current frozen construct (`offset_h < index_h`). I therefore did not edit
+`STUDY_DESIGN.md`, did not add `surg_aortic` to the primary model, did not run
+MICE/PSM/HTE, and did not overwrite any prior aggregate result.
+
+### Aggregate identity probe
+
+The probe used each patient's existing analysis index (own first-albumin T0
+when exposed; `cr_ref_early_offset_h` otherwise), the existing deterministic
+latest-time/maximum-value tie rule, and compared strict-before with at-or-before
+selection. Results:
+
+| Database | Covariate | Strict-before observed | At/before observed | Patient values changed | Maximum absolute change |
+|---|---|---:|---:|---:|---:|
+| MIMIC | albumin | 5,171 | 5,795 | 738 | 1.5 |
+| MIMIC | lactate | 9,621 | 9,721 | 161 | 2.9 |
+| MIMIC | heart rate | 12,247 | 12,280 | 1,213 | 48.0 |
+| MIMIC | hemoglobin | 9,726 | 12,367 | **6,481** | 5.8 |
+| MIMIC | MAP | 12,164 | 12,201 | 1,427 | 124.0 |
+| eICU | albumin | 7,884 | 10,914 | 5,129 | 39.4 |
+| eICU | lactate | 1,997 | 2,704 | 836 | 7.5 |
+| eICU | heart rate | 17,144 | 17,259 | 2,094 | 73.0 |
+| eICU | hemoglobin | 5,902 | 16,130 | **13,051** | 92.9 |
+
+The large hemoglobin differences are consistent with same-timestamp laboratory
+panels at the control reference index and/or treated T0. They demonstrate that
+`last before T0` and `at or before T0` are empirically distinct constructs in
+both databases.
+
+### Hemoglobin definition check
+
+The ETL exports hemoglobin as a timestamped measurement stream:
+
+- MIMIC: item IDs `51222` and `50811`, converted to hours from ICU admission;
+- eICU: lab-name patterns `hgb` and `hemoglobin`, converted from
+  `labresultoffset` to hours.
+
+`02_psm.R` then passes hemoglobin through the same
+`last_value_before_index()` helper as albumin, lactate, and heart rate.
+However, that helper currently enforces `offset_h < index_h`, not
+`offset_h <= index_h`. Thus hemoglobin is the most recent value strictly before
+T0 under the implemented analysis, and it does **not** satisfy the literal
+Entry 12b “at or before T0” definition.
+
+### Additional authoritative context preserved
+
+Entry 14 resolves the prior eICU ventilation decision: the APACHE day-1 proxy
+is to be omitted, eICU is supplementary, and the intended next freeze is v3.3.
+Those decisions are not disputed. The only blocker is the Entry 12b hard
+identity condition, which Entry 14 did not explicitly waive.
+
+### Decision needed
+
+Choose and document one timing definition before the freeze:
+
+1. preserve the existing **strictly-before-T0** values and use a uniform display
+   label that explicitly says “latest strictly before T0”; or
+2. authorize a substantive change to **at-or-before-T0** (`<=`) and treat it as
+   a new covariate-definition change requiring a fresh freeze and rerun.
+
+Recommendation: preserve strict-before values for the primary analysis. It
+honors temporal ordering, avoids incorporating measurements recorded exactly
+at treatment initiation, and satisfies the stated requirement that relabeling
+must not change values. Use “latest strictly before T0” uniformly rather than
+the ambiguous shorthand `@T0`.
+
+### Artifacts
+
+- `probe_at_t0_identity.R` — reusable aggregate-only identity probe.
+- `results/probe_at_t0_identity.csv` — aggregate verification counts only.
+- Tempest job `4262490`; no patient-level output was transferred.
+
+>>> GUARD-RAIL STOP. No v3.3 freeze or outcome run was performed. Awaiting explicit timing-definition approval. <<<
