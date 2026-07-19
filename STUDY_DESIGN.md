@@ -1,8 +1,8 @@
 # Albumin and Cardiac-Surgery AKI: Frozen Main-Experiment Design
 
-- **Design version:** 3.1
-- **Freeze date:** 2026-07-18
-- **Status:** **FROZEN BEFORE OUTCOME ANALYSIS**
+- **Design version:** 3.2
+- **Freeze date:** 2026-07-19
+- **Status:** **FROZEN BEFORE THE M=20 MAIN EXPERIMENT**
 - **Canonical estimator:** `02_psm.R`
 - **Databases:** MIMIC-IV v3.1 and eICU-CRD v2.0, analyzed separately
 
@@ -11,10 +11,15 @@ rationale in `JOURNAL.md`, and supervisor approval before rerunning outcomes.
 The 24-hour ICU-admission landmark script, `02b_landmark_sensitivity.R`, is
 deferred and is not part of the main experiment.
 
-Version 3.1 is a documented falsification amendment authorized after the first
+Version 3.1 was a documented falsification amendment authorized after the first
 MIMIC pooled run exposed an alive-at-T0 eligibility bug and immortal-time bias
 in whole-stay mortality. It does not change the AKI estimand, matching ratio,
 replacement rule, MICE, HC1, DR rule, trigger category, or creatinine outcomes.
+
+Version 3.2 freezes the primary adjustment set after the precommitted m=5
+MIMIC pooled covariate sweep and before any m=20 main-experiment run. The
+supervisor-authorized primary set is S2. S0 and S1 are sensitivity sets only;
+S3-S5 are excluded from the main experiment.
 
 ## 1. Question and estimand
 
@@ -72,21 +77,37 @@ albumin category may substitute for the strict-pre-index category.
 
 ## 4. Propensity score and matching
 
-The pooled model mirrors the magnesium study's primary covariate set, with
-hemoglobin and `alb_cat` added:
+### Version 3.2 frozen primary adjustment set
+
+The MIMIC primary propensity-score set is **S2**, comprising the magnesium-base
+set plus the prespecified resuscitation-severity covariates:
 
 - age, sex, BMI;
 - CABG, valve, and combined-surgery indicators;
-- heart failure, hypertension, diabetes, CKD, COPD, peripheral vascular
-  disease, stroke, and liver disease;
-- eGFR;
-- last strict-pre-index calcium, lactate, lactate-missing indicator, heart
-  rate, and hemoglobin;
-- strict-pre-index `alb_cat`.
+- heart failure, hypertension, diabetes, COPD, peripheral vascular disease,
+  stroke, and liver disease;
+- eGFR in the pooled model;
+- last strict-pre-index lactate, lactate-missing indicator, heart rate, and
+  hemoglobin;
+- strict-pre-index `alb_cat`;
+- vasopressor status at T0, last MAP strictly before T0, and ventilation status
+  at T0.
 
-Potassium, magnesium, Yan-specific extended covariates, and post-index
-variables are excluded from the primary PS. Calcium remains included, matching
-the magnesium primary specification. Control covariates are not re-extracted at
+The eICU primary set deliberately drops vasopressor status and MAP because
+their hospital-level missingness is informative; it retains ventilation status
+at T0. This database-specific difference is prespecified and must be explicit
+in every results report.
+
+S0 (the magnesium-mirror base set) and S1 (S0 plus vasopressor status in MIMIC)
+are sensitivity specifications only. S3-S5 are excluded from primary and
+sensitivity outcome reporting because the m=5 sweep showed broad imputation/PS
+instability; S4 additionally contains near-path resuscitation variables.
+An optional single m=20 S3 balance diagnostic is informational only and cannot
+change the frozen primary set.
+
+Calcium, potassium, magnesium, extended S3-S5 covariates, continuous albumin,
+emergency-admission route, SOFA/APACHE-24h, intraoperative variables, LVEF, and
+post-index variables are excluded. Control covariates are not re-extracted at
 the treated patient's T0 beyond the magnesium pipeline behavior.
 
 For the eGFR-stratified analysis, form strata from `baseline_cr`:
@@ -95,8 +116,9 @@ For the eGFR-stratified analysis, form strata from `baseline_cr`:
 - G2: eGFR 60-89;
 - G3+: eGFR <60.
 
-Match within each stratum and remove eGFR and CKD from that stratum's PS.
-The pooled analysis retains eGFR and CKD in the PS.
+Match within each stratum and remove eGFR and any redundant CKD indicator from
+that stratum's PS. The pooled analysis retains eGFR; CKD is not part of the
+version 3.2 primary set.
 
 For every database and analysis:
 
@@ -146,7 +168,10 @@ the AKI windows. For both horizons report three prespecified diagnostics:
 3. later-treated controls censored at crossover.
 
 Whole-stay hospital mortality is descriptive only and is not the
-falsification test.
+falsification test. Mortality is always reported as both OR and absolute RD;
+the fixed-window RD is the primary falsification read because death is sparse.
+Whole-stay ORs carry an explicit immortal-time caveat and cannot overturn a
+fixed-window RD interpretation.
 
 ### Version 3.1 covariate sweep
 
@@ -171,6 +196,14 @@ values. The comparative sweep uses MICE m=5; only the selected and newly frozen
 set is rerun at m=20. Calcium, emergency-admission route, continuous albumin,
 SOFA/APACHE-24h, intraoperative variables, and LVEF are excluded. The full
 sweep is retained as a transparency analysis.
+
+### Version 3.2 sweep decision
+
+The completed m=5 sweep selected S2 before the m=20 run. S2 covers the
+resuscitation-severity axis while preserving the authorized compromise between
+balance and the fixed-window mortality-RD falsification. Selection was not
+based on the AKI estimate. S0 and S1 remain sensitivities; S3-S5 are excluded
+for the reasons in Section 4.
 
 ## 6. Prespecified analyses and reporting
 

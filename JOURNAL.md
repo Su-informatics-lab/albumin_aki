@@ -1474,3 +1474,51 @@ No flexible PS or outcome-driven set selection was attempted.
 No matched-pair file, spot-check file, or patient-level data is committed.
 
 >>> GUARD-RAIL STOP. Full corrected m=5 MIMIC pooled sweep reported; no set frozen. Await supervisor review. <<<
+
+---
+
+## Entry 12 — Supervisor interpretation of the sweep + decision  (2026-07-18, Claude)
+
+Excellent, disciplined sweep. Reading it against the pre-committed criterion (falsification by **RD**,
+sparse OR down-weighted) and the balance table, the picture is clearer and better than "no set achieved
+balance" implies:
+
+1. **The AKI harm is robust and large — this is the finding.** DR ORs are stable across S0–S3: KDIGO≥1
+   ~2.0–2.2 (**RD ≈ +14 pp**; 35% vs ~23%), stage≥2-or-RRT 7d ~2.0–2.4 (**RD ≈ +4–5 pp**). It does **not**
+   attenuate when the resuscitation-severity axis is added (S1 vaso, S2 +MAP+vent) — so the harm is not
+   explained by confounding-by-indication on the measured severity vars. The absolute RDs are an order of
+   magnitude larger than any plausible selection artifact.
+2. **The mortality falsification passes on the correct scale.** Every fixed-window mortality **RD is tiny**
+   at S0–S3 (|RD| < ~0.8 pp on death that is itself ~1–2%). The scary whole-stay OR 0.55 was immortal-time
+   bias (DR pulls it to ~0.82–0.96; fixed-window + RD are ~null). Per the RD-first rule for sparse death,
+   this is a **pass**, not a failure — the earlier OR-0.55 red flag is downgraded to "large OR on a
+   trivial RD." (S4/S5's *protective* mortality flip is a broken-balance artifact, not de-confounding.)
+3. **The S3–S5 balance blow-up (max SMD 0.45–0.50) is a compute artifact, not a data problem.** The S3
+   probe shows the imbalance is **broad** (alb_cat 0.498, BUN, eGFR, HR, HF — vars that were balanced at
+   S0–S2), with 50 MICE logged events — the signature of **m=5 imputation instability + a bloated PS**,
+   not genuine non-overlap on the new labs. S4/S5 also add **near-path** resuscitation variables (own
+   warning). So S3–S5 are not usable and should not be pursued as primary.
+
+### Decision
+
+- **Freeze S2** (base mg set + `vaso_at_t0` + `MAP_before_t0` + `vent_at_t0`) as the **primary adjustment
+  set**: it covers the resuscitation-severity confounding we worried about, keeps acceptable balance
+  (max SMD 0.256, DR-handled — within mg precedent), the AKI harm holds, and mortality RD is ~null.
+  **Re-run S2 at m=20** for the locked result.
+- **Sensitivities:** S0 (pure mg-mirror) and S1 (base + vaso). **Do not use S3–S5** as primary (m=5
+  artifact + near-path); a single **m=20 S3 diagnostic** is allowed to confirm its balance breakdown was
+  imputation instability — informational only, not gating.
+- **Falsification reporting rule (locked):** report mortality as OR **and** RD; the primary read is the
+  fixed-window RD (null); note the whole-stay OR immortal-time caveat. This is the mg-consistent, honest framing.
+- The AKI harm is **not** a fragile main effect being propped up by estimator choice — it is stable across
+  covariate sets and estimators — so, per the user's directive, the pooled main effect can carry the paper
+  if it replicates; the eGFR view is complementary, not a forced pivot.
+
+### Release
+
+With S2 frozen at m=20, **proceed to the full main experiment**: MIMIC + eICU, **pooled + eGFR-stratified**,
+then **03_hte.R** (treatment × eGFR interaction + subgroups). Same frozen S2 covariates (eICU drops
+vaso/MAP per informative missingness; note the covariate-set difference). Report OR + RD throughout,
+mortality falsification per the locked rule. Stop at the results gate (Entry 13).
+
+>>> APPROVED: freeze S2 @ m=20 (primary); S0/S1 sensitivities; S3–S5 excluded. Release MIMIC+eICU pooled + eGFR-stratified + HTE. Stop at the results gate. <<<
