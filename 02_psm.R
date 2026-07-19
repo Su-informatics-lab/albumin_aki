@@ -200,7 +200,9 @@ treated_ok <- treated_all[
   all_pts$cr_ref_early_offset_h[treated_all] <= all_pts$alb_offset_h[treated_all] &
     (is.na(all_pts$first_prevalent_h[treated_all]) |
        all_pts$first_prevalent_h[treated_all] > all_pts$alb_offset_h[treated_all]) &
-    all_pts$icu_discharge_h[treated_all] > all_pts$alb_offset_h[treated_all]
+    all_pts$icu_discharge_h[treated_all] > all_pts$alb_offset_h[treated_all] &
+    (is.na(all_pts$death_offset_h[treated_all]) |
+       all_pts$death_offset_h[treated_all] > all_pts$alb_offset_h[treated_all])
 ]
 cat(sprintf("  treated eligible after pair-time prevalent screen: %d/%d\n",
             length(treated_ok), length(treated_all)))
@@ -230,6 +232,7 @@ for (stratum in strata_to_run) {
     risk <- which(
       in_stratum & all_pts$pid != all_pts$pid[ti] &
         all_pts$icu_discharge_h > t0 &
+        (is.na(all_pts$death_offset_h) | all_pts$death_offset_h > t0) &
         all_pts$cr_ref_early_offset_h <= t0 &
         (is.na(all_pts$first_prevalent_h) | all_pts$first_prevalent_h > t0) &
         (is.na(all_pts$alb_offset_h) | all_pts$alb_offset_h > t0 + PRIMARY_H)

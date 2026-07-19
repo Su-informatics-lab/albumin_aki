@@ -143,3 +143,101 @@ pair_binary_or <- function(y_t, y_c, adjust_t = NULL, adjust_c = NULL) {
   base$p <- ct["treated", ncol(ct)]
   base
 }
+
+pair_or_rd <- function(y_t, y_c, adjust_t = NULL, adjust_c = NULL) {
+  valid <- !is.na(y_t) & !is.na(y_c)
+  y_t <- y_t[valid]
+  y_c <- y_c[valid]
+  n <- length(y_t)
+  result <- data.frame(
+    n = n,
+    rate_trt = if (n) mean(y_t) else NA_real_,
+    rate_ctl = if (n) mean(y_c) else NA_real_,
+    or = NA_real_, or_ci_lo = NA_real_, or_ci_hi = NA_real_, or_p = NA_real_,
+    rd = NA_real_, rd_ci_lo = NA_real_, rd_ci_hi = NA_real_, rd_p = NA_real_
+  )
+  if (n < 30 || sum(y_t) + sum(y_c) < 5) return(result)
+  dat <- data.frame(
+    outcome = c(y_t, y_c),
+    treated = rep(c(1L, 0L), each = n)
+  )
+  if (!is.null(adjust_t) && ncol(adjust_t) > 0) {
+    if (is.null(adjust_c) || !identical(names(adjust_t), names(adjust_c))) {
+      stop("adjust_t and adjust_c must have identical columns")
+    }
+    adj_t <- adjust_t[valid, , drop = FALSE]
+    adj_c <- adjust_c[valid, , drop = FALSE]
+    for (nm in names(adj_t)) dat[[nm]] <- c(adj_t[[nm]], adj_c[[nm]])
+  }
+  rhs <- c("treated", if (!is.null(adjust_t)) names(adjust_t) else character())
+  formula <- reformulate(rhs, response = "outcome")
+  fit_or <- tryCatch(
+    glm(formula, data = dat, family = quasibinomial()),
+    error = function(e) NULL
+  )
+  fit_rd <- tryCatch(lm(formula, data = dat), error = function(e) NULL)
+  ct_or <- if (is.null(fit_or)) NULL else safe_hc1(fit_or)
+  ct_rd <- if (is.null(fit_rd)) NULL else safe_hc1(fit_rd)
+  if (!is.null(ct_or) && "treated" %in% rownames(ct_or)) {
+    estimate <- ct_or["treated", 1]
+    se <- ct_or["treated", 2]
+    result$or <- exp(estimate)
+    result$or_ci_lo <- exp(estimate - 1.96 * se)
+    result$or_ci_hi <- exp(estimate + 1.96 * se)
+    result$or_p <- ct_or["treated", ncol(ct_or)]
+  }
+  if (!is.null(ct_rd) && "treated" %in% rownames(ct_rd)) {
+    estimate <- ct_rd["treated", 1]
+    se <- ct_rd["treated", 2]
+    result$rd <- estimate
+    result$rd_ci_lo <- estimate - 1.96 * se
+    result$rd_ci_hi <- estimate + 1.96 * se
+    result$rd_p <- ct_rd["treated", ncol(ct_rd)]
+  }
+  result
+}
+
+fixed_window_death <- function(death_offset_h, t0_h, horizon_h) {
+  as.integer(
+    !is.na(death_offset_h) & death_offset_h > t0_h &
+      death_offset_h <= t0_h + horizon_h
+  )
+}
+
+pair_mean_difference <- function(y_t, y_c, adjust_t = NULL, adjust_c = NULL) {
+  valid <- !is.na(y_t) & !is.na(y_c)
+  y_t <- y_t[valid]
+  y_c <- y_c[valid]
+  n <- length(y_t)
+  result <- data.frame(
+    n = n, mean_trt = if (n) mean(y_t) else NA_real_,
+    mean_ctl = if (n) mean(y_c) else NA_real_,
+    did = NA_real_, did_ci_lo = NA_real_, did_ci_hi = NA_real_,
+    did_p = NA_real_
+  )
+  if (n < 30) return(result)
+  dat <- data.frame(value = c(y_t, y_c), treated = rep(c(1L, 0L), each = n))
+  if (!is.null(adjust_t) && ncol(adjust_t) > 0) {
+    if (is.null(adjust_c) || !identical(names(adjust_t), names(adjust_c))) {
+      stop("adjust_t and adjust_c must have identical columns")
+    }
+    adj_t <- adjust_t[valid, , drop = FALSE]
+    adj_c <- adjust_c[valid, , drop = FALSE]
+    for (nm in names(adj_t)) dat[[nm]] <- c(adj_t[[nm]], adj_c[[nm]])
+  }
+  rhs <- c("treated", if (!is.null(adjust_t)) names(adjust_t) else character())
+  fit <- tryCatch(
+    lm(reformulate(rhs, response = "value"), data = dat),
+    error = function(e) NULL
+  )
+  ct <- if (is.null(fit)) NULL else safe_hc1(fit)
+  if (!is.null(ct) && "treated" %in% rownames(ct)) {
+    estimate <- ct["treated", 1]
+    se <- ct["treated", 2]
+    result$did <- estimate
+    result$did_ci_lo <- estimate - 1.96 * se
+    result$did_ci_hi <- estimate + 1.96 * se
+    result$did_p <- ct["treated", ncol(ct)]
+  }
+  result
+}

@@ -4,6 +4,7 @@ file_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 file_arg <- sub("^--file=", "", file_arg[1])
 repo <- dirname(dirname(normalizePath(file_arg)))
 source(file.path(repo, "R", "causal_helpers.R"))
+source(file.path(repo, "R", "covariate_registry.R"))
 
 # Missing post-T0 Cr is a non-event for SCr outcomes, while new RRT remains
 # available only in the labeled secondary.
@@ -37,5 +38,33 @@ stopifnot(identical(
   eligible_same_stratum(candidate, "G2"),
   c(FALSE, TRUE, FALSE, FALSE)
 ))
+stopifnot(
+  identical(names(COVARIATE_SETS), paste0("S", 0:5)),
+  all(vapply(seq_len(5), function(i) {
+    all(COVARIATE_SETS[[i]] %in% COVARIATE_SETS[[i + 1]])
+  }, logical(1))),
+  !any(grepl("post|outcome|death|rrt", unlist(COVARIATE_SETS)))
+)
 
-cat("PASS: non-event coding, two-reference baseline/tie rule, within-stratum matching\n")
+death <- fixed_window_death(c(NA, 12, 70, 200), rep(10, 4), 48)
+stopifnot(identical(death, c(0L, 1L, 0L, 0L)))
+
+if (requireNamespace("sandwich", quietly = TRUE) &&
+    requireNamespace("lmtest", quietly = TRUE)) {
+  estimate <- pair_or_rd(
+    c(rep(1, 20), rep(0, 80)),
+    c(rep(1, 10), rep(0, 90))
+  )
+  stopifnot(
+    is.finite(estimate$or), is.finite(estimate$rd),
+    abs(estimate$rd - 0.1) < 1e-12,
+    estimate$or_ci_lo < estimate$or,
+    estimate$or_ci_hi > estimate$or
+  )
+}
+
+cat(
+  "PASS: non-event coding, two-reference baseline/tie rule, ",
+  "within-stratum matching, fixed mortality, OR/RD utility\n",
+  sep = ""
+)
