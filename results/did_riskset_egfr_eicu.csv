@@ -1,0 +1,4 @@
+"db","database_role","analysis_set","variant","stratum","ps_covariates","treated_eligible","matched","match_rate","caliper","max_smd","n_viol"
+"EICU","supplementary","primary","egfr","G1",19,612,589,0.962418300653595,0.017638983280286,0.160412417863425,4
+"EICU","supplementary","primary","egfr","G2",19,805,783,0.972670807453416,0.0219294658013755,0.295765800716222,3
+"EICU","supplementary","primary","egfr","G3plus",19,564,546,0.968085106382979,0.0283369590788921,0.208349221035069,2

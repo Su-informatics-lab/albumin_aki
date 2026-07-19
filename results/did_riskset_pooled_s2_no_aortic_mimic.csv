@@ -1,2 +1,2 @@
 "db","database_role","analysis_set","variant","stratum","ps_covariates","treated_eligible","matched","match_rate","caliper","max_smd","n_viol"
-"EICU","supplementary","primary","pooled","Overall",20,1981,1949,0.983846542150429,0.0224654057325409,0.25057096373871,3
+"MIMIC","primary","s2_no_aortic","pooled","Overall",22,5428,5428,1,0.0629611809695803,0.263317698312185,4

@@ -1935,3 +1935,326 @@ eICU-stratified nor surg_aortic has actually run yet. Sensitivities S0/S1/S2-wit
 fixed-window RD primary.
 
 >>> APPROVED: strictly-before-T0 (label-only unification); freeze v3.3 (S2+aortic, eICU vent omitted); run the full m=20 incl. HTE; stop at Entry 17. <<<
+
+---
+
+## Entry 17 — v3.3 full m=20 main experiment results gate (2026-07-19, Codex)
+
+### Gate outcome
+
+The supervisor-authorized v3.3 design was committed before the run
+(`0ede7de`), and the estimator/test implementation was committed separately
+(`6526423`). All four primary/supplementary matching models, the MIMIC pooled
+S2-without-aortic sensitivity, both HTE jobs, and all matched-arm no-post-Cr
+probes completed. Every stratum exceeded the 90% match-rate guard.
+
+The timing resolution is value-preserving: measured covariates remain the most
+recent qualifying value strictly before T0 (`offset_h < index_h`), while
+ongoing organ supports are status at T0. No `<=` selector was introduced.
+Static fixtures passed locally and on Tempest under R 4.5.1. Both HTE runs
+passed exact pooled-OR reconciliation against `02_psm.R`.
+
+MIMIC is the primary database. eICU is supplementary and materially
+under-adjusted: its fixed-window mortality falsification remains non-null and
+post-T0 creatinine ascertainment is differential. Those failures are reported,
+not repaired or used to reselect the propensity model.
+
+### Commands and jobs
+
+All Tempest jobs used `sbatch --export=NONE`, `module purge`,
+`R/4.5.1-gfbf-2025a`, seed 2026, MICE m=20, logistic PS, 1:1 nearest-neighbor
+matching with replacement, caliper 0.2 SD, HC1, and DR when any SMD exceeded
+0.10.
+
+```bash
+Rscript tests/test_phase3_static.R                                      # 4262495
+Rscript 02_psm.R mimic pooled                                           # 4262497
+Rscript 02_psm.R mimic pooled s2_no_aortic                              # 4262500
+Rscript 02_psm.R mimic egfr                                             # 4262502
+Rscript 02_psm.R eicu pooled                                            # 4262503
+Rscript probe_nopost_cr.R eicu pooled
+Rscript probe_eicu_underadjustment.R                                    # 4262504
+Rscript 02_psm.R eicu egfr                                              # 4262506
+Rscript probe_nopost_cr.R mimic pooled
+Rscript probe_nopost_cr.R mimic egfr
+Rscript probe_nopost_cr.R eicu egfr                                     # 4262510
+Rscript 03_hte.R mimic                                                  # 4262513
+Rscript 03_hte.R eicu                                                   # 4262512
+```
+
+### Matching and balance
+
+`Aortic raw SMD` is the prespecified source-cohort comparison (eligible
+ever-treated versus never-treated); matched SMD is on the selected pairs.
+
+| Model | PS n | Matched | Max SMD | Violations | Aortic raw SMD | Aortic matched SMD |
+|---|---:|---:|---:|---:|---:|---:|
+| MIMIC pooled primary | 23 | 5,428/5,428 (100.0%) | 0.271 | 4 | 0.113 | 0.033 |
+| MIMIC G1 primary | 22 | 2,745/2,746 (100.0%) | 0.220 | 3 | 0.079 | 0.032 |
+| MIMIC G2 primary | 22 | 1,893/1,894 (99.9%) | 0.256 | 3 | 0.113 | 0.144 |
+| MIMIC G3+ primary | 22 | 786/788 (99.7%) | 0.413 | 9 | 0.192 | 0.052 |
+| MIMIC pooled S2 without aortic | 22 | 5,428/5,428 (100.0%) | 0.263 | 4 | — | — |
+| eICU pooled supplementary | 20 | 1,949/1,981 (98.4%) | 0.251 | 3 | 0.161 | 0.016 |
+| eICU G1 supplementary | 19 | 589/612 (96.2%) | 0.160 | 4 | 0.110 | 0.096 |
+| eICU G2 supplementary | 19 | 783/805 (97.3%) | 0.296 | 3 | 0.109 | 0.061 |
+| eICU G3+ supplementary | 19 | 546/564 (96.8%) | 0.208 | 2 | 0.262 | 0.053 |
+
+MIMIC pooled residual violations were albumin category 0.271, eGFR 0.229,
+hemoglobin 0.139, and heart failure 0.102. G3+ had the weakest stratified
+balance; its estimates therefore require the frozen DR read. eICU pooled
+violations were lactate 0.251, eGFR 0.201, and albumin category 0.114.
+
+### Yan aortic-balance test
+
+Adding aortic did **not** reduce the pooled maximum SMD or number of violations:
+max SMD was 0.271 with aortic versus 0.263 without, and both had four
+violations. Thus the prespecified Yan hypothesis is not supported on its
+headline criteria. It did improve three residual axes—eGFR 0.251 to 0.229,
+hemoglobin 0.176 to 0.139, and heart failure 0.121 to 0.102—while albumin
+category worsened from 0.263 to 0.271. Aortic itself balanced from raw 0.113 to
+0.033. This is reported as a matching tradeoff; the frozen set was not
+reselected on balance or AKI.
+
+### Primary renal outcomes — MIMIC DR estimates
+
+OR and RD are from the same DR fit; RD is in percentage points. `NE` denotes
+the prespecified sparse-cell non-estimable result.
+
+| Model | Outcome | OR (95% CI); P | RD pp (95% CI); P |
+|---|---|---|---|
+| Pooled | KDIGO >=1, 48h | 1.88 (1.71-2.07); P<.001 | +12.27 (+10.48 to +14.07); P<.001 |
+| Pooled | KDIGO >=2, 48h | 1.97 (1.59-2.45); P<.001 | +2.40 (+1.62 to +3.17); P<.001 |
+| Pooled | KDIGO >=3, 48h | 1.77 (1.16-2.72); P=.009 | +0.35 (-0.03 to +0.72); P=.070 |
+| Pooled | >=2 or new RRT, 48h | 1.99 (1.62-2.45); P<.001 | +2.67 (+1.86 to +3.49); P<.001 |
+| Pooled | KDIGO >=1, 7d | 1.76 (1.60-1.94); P<.001 | +11.89 (+9.93 to +13.85); P<.001 |
+| Pooled | KDIGO >=2, 7d | 1.92 (1.60-2.30); P<.001 | +3.71 (+2.67 to +4.75); P<.001 |
+| Pooled | KDIGO >=3, 7d | 1.53 (1.14-2.06); P=.005 | +0.59 (-0.01 to +1.19); P=.056 |
+| Pooled | >=2 or new RRT, 7d | 1.98 (1.66-2.36); P<.001 | +4.04 (+2.97 to +5.10); P<.001 |
+| G1 | KDIGO >=1, 48h | 1.58 (1.38-1.81); P<.001 | +7.90 (+5.59 to +10.22); P<.001 |
+| G1 | KDIGO >=2, 48h | 1.91 (1.38-2.64); P<.001 | +2.04 (+1.02 to +3.06); P<.001 |
+| G1 | KDIGO >=3, 48h | 3.80 (1.38-10.48); P=.010 | +0.52 (+0.15 to +0.89); P=.006 |
+| G1 | >=2 or new RRT, 48h | 1.97 (1.42-2.73); P<.001 | +2.18 (+1.14 to +3.21); P<.001 |
+| G1 | KDIGO >=1, 7d | 1.49 (1.30-1.69); P<.001 | +7.71 (+5.16 to +10.26); P<.001 |
+| G1 | KDIGO >=2, 7d | 1.26 (0.98-1.64); P=.076 | +1.08 (-0.21 to +2.36); P=.101 |
+| G1 | KDIGO >=3, 7d | 1.12 (0.64-1.94); P=.696 | +0.12 (-0.50 to +0.75); P=.701 |
+| G1 | >=2 or new RRT, 7d | 1.28 (0.99-1.66); P=.058 | +1.16 (-0.13 to +2.45); P=.078 |
+| G2 | KDIGO >=1, 48h | 1.99 (1.71-2.31); P<.001 | +14.41 (+11.27 to +17.56); P<.001 |
+| G2 | KDIGO >=2, 48h | 2.93 (1.92-4.47); P<.001 | +3.22 (+2.01 to +4.43); P<.001 |
+| G2 | KDIGO >=3, 48h | NE | NE |
+| G2 | >=2 or new RRT, 48h | 2.78 (1.85-4.20); P<.001 | +3.18 (+1.95 to +4.40); P<.001 |
+| G2 | KDIGO >=1, 7d | 1.80 (1.55-2.10); P<.001 | +13.17 (+9.80 to +16.53); P<.001 |
+| G2 | KDIGO >=2, 7d | 2.56 (1.86-3.53); P<.001 | +5.14 (+3.46 to +6.83); P<.001 |
+| G2 | KDIGO >=3, 7d | 1.87 (1.01-3.46); P=.045 | +0.70 (-0.06 to +1.46); P=.073 |
+| G2 | >=2 or new RRT, 7d | 2.61 (1.90-3.60); P<.001 | +5.29 (+3.59 to +6.99); P<.001 |
+| G3+ | KDIGO >=1, 48h | 2.51 (1.97-3.22); P<.001 | +22.01 (+16.36 to +27.66); P<.001 |
+| G3+ | KDIGO >=2, 48h | 1.36 (0.81-2.28); P=.250 | +1.41 (-0.99 to +3.81); P=.250 |
+| G3+ | KDIGO >=3, 48h | 1.21 (0.65-2.26); P=.551 | +0.56 (-1.76 to +2.88); P=.637 |
+| G3+ | >=2 or new RRT, 48h | 1.62 (1.02-2.56); P=.041 | +2.81 (+0.05 to +5.58); P=.047 |
+| G3+ | KDIGO >=1, 7d | 2.53 (1.92-3.33); P<.001 | +21.96 (+15.69 to +28.23); P<.001 |
+| G3+ | KDIGO >=2, 7d | 1.59 (1.06-2.37); P=.024 | +4.53 (+0.50 to +8.57); P=.028 |
+| G3+ | KDIGO >=3, 7d | 1.39 (0.86-2.24); P=.181 | +2.28 (-1.14 to +5.70); P=.192 |
+| G3+ | >=2 or new RRT, 7d | 1.38 (0.94-2.01); P=.099 | +3.70 (-0.73 to +8.14); P=.102 |
+
+The most consistent MIMIC pattern is KDIGO >=1 harm with a monotonic absolute
+gradient: 48h RD +7.90 (G1), +14.41 (G2), and +22.01 points (G3+); the 7-day
+pattern is similar. Severe-stage endpoints are more heterogeneous and sparse,
+so their RDs, not large ORs, govern interpretation.
+
+### Supplementary renal outcomes — eICU DR estimates
+
+| Model | Outcome | OR (95% CI); P | RD pp (95% CI); P |
+|---|---|---|---|
+| Pooled | KDIGO >=1, 48h | 1.24 (1.06-1.45); P=.008 | +3.39 (+0.72 to +6.05); P=.013 |
+| Pooled | KDIGO >=2, 48h | 1.19 (0.82-1.72); P=.359 | +0.51 (-0.59 to +1.62); P=.362 |
+| Pooled | KDIGO >=3, 48h | 0.81 (0.48-1.35); P=.413 | -0.46 (-1.18 to +0.26); P=.210 |
+| Pooled | >=2 or new RRT, 48h | 1.13 (0.82-1.55); P=.447 | +0.43 (-0.90 to +1.76); P=.530 |
+| Pooled | KDIGO >=1, 7d | 1.24 (1.06-1.45); P=.006 | +3.80 (+0.98 to +6.62); P=.008 |
+| Pooled | KDIGO >=2, 7d | 1.23 (0.92-1.64); P=.172 | +1.02 (-0.44 to +2.47); P=.173 |
+| Pooled | KDIGO >=3, 7d | 0.95 (0.63-1.44); P=.823 | -0.25 (-1.28 to +0.79); P=.639 |
+| Pooled | >=2 or new RRT, 7d | 1.23 (0.94-1.59); P=.126 | +1.23 (-0.42 to +2.88); P=.145 |
+| G1 | KDIGO >=1, 48h | 1.49 (1.03-2.16); P=.033 | +4.23 (+0.34 to +8.11); P=.033 |
+| G1 | KDIGO >=2, 48h | 3.88 (1.39-10.87); P=.010 | +2.35 (+0.68 to +4.01); P=.006 |
+| G1 | KDIGO >=3, 48h | sparse OR; not interpreted | +1.06 (+0.21 to +1.90); P=.014 |
+| G1 | >=2 or new RRT, 48h | 3.43 (1.33-8.87); P=.011 | +2.36 (+0.64 to +4.08); P=.007 |
+| G1 | KDIGO >=1, 7d | 1.41 (1.02-1.95); P=.040 | +4.60 (+0.20 to +9.00); P=.041 |
+| G1 | KDIGO >=2, 7d | 1.97 (1.01-3.85); P=.047 | +2.23 (+0.07 to +4.40); P=.043 |
+| G1 | KDIGO >=3, 7d | 10.23 (1.37-76.65); P=.024 | +1.59 (+0.47 to +2.70); P=.005 |
+| G1 | >=2 or new RRT, 7d | 1.92 (1.00-3.67); P=.048 | +2.25 (+0.05 to +4.46); P=.046 |
+| G2 | KDIGO >=1, 48h | 1.51 (1.17-1.96); P=.002 | +6.49 (+2.43 to +10.56); P=.002 |
+| G2 | KDIGO >=2, 48h | 0.96 (0.57-1.63); P=.888 | -0.14 (-2.00 to +1.73); P=.886 |
+| G2 | KDIGO >=3, 48h | 3.59 (0.34-37.77); P=.287 | +0.34 (-0.37 to +1.05); P=.352 |
+| G2 | >=2 or new RRT, 48h | 1.01 (0.61-1.68); P=.976 | +0.03 (-1.93 to +1.98); P=.978 |
+| G2 | KDIGO >=1, 7d | 1.52 (1.18-1.96); P=.001 | +7.23 (+2.93 to +11.54); P=.001 |
+| G2 | KDIGO >=2, 7d | 1.31 (0.83-2.08); P=.252 | +1.40 (-0.99 to +3.78); P=.251 |
+| G2 | KDIGO >=3, 7d | 1.16 (0.43-3.14); P=.775 | +0.20 (-1.11 to +1.51); P=.765 |
+| G2 | >=2 or new RRT, 7d | 1.39 (0.89-2.17); P=.147 | +1.84 (-0.64 to +4.32); P=.146 |
+| G3+ | KDIGO >=1, 48h | 1.10 (0.85-1.42); P=.475 | +2.14 (-3.72 to +8.00); P=.475 |
+| G3+ | KDIGO >=2, 48h | 0.81 (0.42-1.57); P=.537 | -0.75 (-3.10 to +1.61); P=.534 |
+| G3+ | KDIGO >=3, 48h | 0.35 (0.16-0.74); P=.006 | -3.36 (-5.65 to -1.06); P=.004 |
+| G3+ | >=2 or new RRT, 48h | 0.89 (0.55-1.46); P=.654 | -0.75 (-4.00 to +2.50); P=.651 |
+| G3+ | KDIGO >=1, 7d | 1.09 (0.83-1.43); P=.538 | +1.95 (-4.25 to +8.14); P=.538 |
+| G3+ | KDIGO >=2, 7d | 0.80 (0.47-1.34); P=.396 | -1.39 (-4.60 to +1.81); P=.394 |
+| G3+ | KDIGO >=3, 7d | 0.53 (0.31-0.93); P=.026 | -3.62 (-6.73 to -0.51); P=.023 |
+| G3+ | >=2 or new RRT, 7d | 0.99 (0.65-1.51); P=.958 | -0.11 (-4.09 to +3.87); P=.957 |
+
+eICU supports a small pooled stage >=1 association only. Severe-stage results
+are null or discordant, and G3+ reverses for sparse stage >=3. Given failed
+mortality falsification and differential ascertainment, eICU cannot be read as
+co-primary replication.
+
+### Formal treatment-by-eGFR interaction
+
+Interaction OR is per +30 mL/min/1.73 m2 eGFR. Values below one mean the
+albumin-associated OR declines as eGFR rises.
+
+| Database | Outcome | Interaction OR (95% CI) | P interaction |
+|---|---|---:|---:|
+| MIMIC | KDIGO >=1, 48h | 0.42 (0.37-0.48) | <.001 |
+| MIMIC | KDIGO >=2, 48h | 0.80 (0.58-1.12) | .189 |
+| MIMIC | KDIGO >=3, 48h | 0.19 (0.10-0.38) | <.001 |
+| MIMIC | >=2 or new RRT, 48h | 0.64 (0.46-0.87) | .005 |
+| MIMIC | KDIGO >=1, 7d | 0.47 (0.41-0.54) | <.001 |
+| MIMIC | KDIGO >=2, 7d | 0.70 (0.54-0.91) | .008 |
+| MIMIC | KDIGO >=3, 7d | 0.29 (0.19-0.46) | <.001 |
+| MIMIC | >=2 or new RRT, 7d | 0.60 (0.46-0.78) | <.001 |
+| eICU | KDIGO >=1, 48h | 0.62 (0.51-0.75) | <.001 |
+| eICU | KDIGO >=2, 48h | 1.09 (0.71-1.67) | .701 |
+| eICU | KDIGO >=3, 48h | 0.72 (0.30-1.70) | .450 |
+| eICU | >=2 or new RRT, 48h | 0.84 (0.57-1.23) | .362 |
+| eICU | KDIGO >=1, 7d | 0.70 (0.58-0.85) | <.001 |
+| eICU | KDIGO >=2, 7d | 0.95 (0.66-1.36) | .763 |
+| eICU | KDIGO >=3, 7d | 0.61 (0.33-1.13) | .118 |
+| eICU | >=2 or new RRT, 7d | 0.73 (0.52-1.01) | .055 |
+
+The stage >=1 interaction is strong and directionally concordant across
+databases. MIMIC also shows interaction for most secondary/severe outcomes;
+eICU does not. However, formal mortality interactions were also non-null
+(MIMIC 48h P=.0019, 7d P<.001; eICU 48h P<.001, 7d P=.0068), so the renal HTE
+cannot be described as free of residual severity confounding.
+
+All prespecified treated-patient subgroups with n>=30 were emitted in
+`did_hte_mimic.csv` and `did_hte_eicu.csv`; matched controls were retained
+regardless of control subgroup value. No subgroup was used to select the
+headline.
+
+### S2-without-aortic sensitivity — MIMIC pooled DR
+
+| Outcome | OR (95% CI); P | RD pp (95% CI); P |
+|---|---|---|
+| KDIGO >=1, 48h | 2.08 (1.89-2.29); P<.001 | +14.05 (+12.27 to +15.83); P<.001 |
+| KDIGO >=2, 48h | 2.00 (1.61-2.50); P<.001 | +2.44 (+1.66 to +3.21); P<.001 |
+| KDIGO >=3, 48h | 3.70 (2.11-6.50); P<.001 | +0.79 (+0.44 to +1.15); P<.001 |
+| >=2 or new RRT, 48h | 2.12 (1.72-2.62); P<.001 | +2.85 (+2.04 to +3.66); P<.001 |
+| KDIGO >=1, 7d | 1.87 (1.70-2.06); P<.001 | +13.04 (+11.10 to +14.99); P<.001 |
+| KDIGO >=2, 7d | 1.76 (1.47-2.10); P<.001 | +3.36 (+2.30 to +4.42); P<.001 |
+| KDIGO >=3, 7d | 1.90 (1.42-2.54); P<.001 | +1.15 (+0.53 to +1.77); P<.001 |
+| >=2 or new RRT, 7d | 1.84 (1.54-2.19); P<.001 | +3.74 (+2.66 to +4.83); P<.001 |
+
+The primary harm pattern persists without aortic, but several estimates move
+materially (for example KDIGO >=1 48h DR +12.27 primary versus +14.05 without
+aortic). This sensitivity does not justify dropping aortic after seeing the
+outcome.
+
+### Fixed-window mortality falsification — pooled DR
+
+| Database | Outcome/control diagnostic | OR (95% CI); P | RD pp (95% CI); P |
+|---|---|---|---|
+| MIMIC | 48h all | 3.56 (1.86-6.79); P<.001 | +0.43 (+0.14 to +0.73); P=.004 |
+| MIMIC | 48h never-treated | 1.49 (0.77-2.89); P=.238 | +0.07 (-0.20 to +0.35); P=.597 |
+| MIMIC | 48h crossover-censored | 3.34 (1.66-6.72); P<.001 | +0.39 (+0.08 to +0.69); P=.013 |
+| MIMIC | 7d all | 1.41 (0.99-2.01); P=.057 | +0.29 (-0.15 to +0.73); P=.201 |
+| MIMIC | 7d never-treated | 1.36 (0.87-2.14); P=.177 | +0.20 (-0.23 to +0.63); P=.359 |
+| MIMIC | 7d crossover-censored | 1.70 (1.09-2.67); P=.020 | +0.40 (-0.04 to +0.84); P=.078 |
+| eICU | 48h all | 2.57 (1.62-4.06); P<.001 | +1.81 (+0.84 to +2.77); P<.001 |
+| eICU | 48h never-treated | 2.17 (1.33-3.55); P=.002 | +1.36 (+0.42 to +2.30); P=.005 |
+| eICU | 48h crossover-censored | 2.63 (1.63-4.23); P<.001 | +1.77 (+0.82 to +2.73); P<.001 |
+| eICU | 7d all | 1.62 (1.21-2.17); P=.001 | +2.14 (+0.69 to +3.59); P=.004 |
+| eICU | 7d never-treated | 1.77 (1.28-2.45); P<.001 | +2.38 (+0.95 to +3.81); P=.001 |
+| eICU | 7d crossover-censored | 1.86 (1.35-2.57); P<.001 | +2.60 (+1.18 to +4.03); P<.001 |
+
+MIMIC's 7-day RD is approximately null, and its 48-hour never-treated
+diagnostic is null, but the all-control and crossover-censored 48-hour DR RDs
+are non-null. eICU fails falsification at both horizons under every control
+diagnostic. Sparse stratum ORs are not interpreted; the committed tables retain
+all stratum-specific mortality ORs and RDs.
+
+### Matched-arm post-T0 creatinine diagnostic
+
+| Model | Horizon | Treated/control rate | Difference |
+|---|---:|---:|---:|
+| MIMIC pooled | 48h | 0.07% / 0.13% | -0.06 pp |
+| MIMIC pooled | 7d | 0.07% / 0.09% | -0.02 pp |
+| MIMIC G1 | 48h / 7d | 0.04% / 0.18%; 0.04% / 0.07% | -0.15; -0.04 pp |
+| MIMIC G2 | 48h / 7d | 0.11% / 0.05%; 0.11% / 0.05% | +0.05; +0.05 pp |
+| MIMIC G3+ | 48h / 7d | 0.13% / 0.13%; 0.13% / 0.13% | 0.00; 0.00 pp |
+| eICU pooled | 48h | 5.64% / 3.03% | +2.62 pp |
+| eICU pooled | 7d | 2.41% / 1.74% | +0.67 pp |
+| eICU G1 | 48h / 7d | 3.23% / 1.87%; 1.70% / 0.85% | +1.36; +0.85 pp |
+| eICU G2 | 48h / 7d | 7.02% / 2.17%; 2.30% / 1.15% | +4.85; +1.15 pp |
+| eICU G3+ | 48h / 7d | 6.23% / 1.83%; 3.30% / 1.83% | +4.40; +1.47 pp |
+
+MIMIC ascertainment differences are negligible. eICU treated patients remain
+substantially more likely to lack post-T0 creatinine, especially at 48 hours in
+G2 and G3+. The frozen non-event coding was retained; no complete-case
+selection or IPCW was introduced.
+
+### eICU under-adjustment diagnostic
+
+Available baseline axes were compared before and after matching in
+`probe_eicu_underadjustment.csv`. The largest raw SMDs were albumin category
+0.557, CABG 0.392, lactate 0.344, lactate-missingness 0.339, hypertension
+0.172, valve surgery 0.171, and aortic surgery 0.161. Matched SMDs were 0.114,
+0.019, 0.251, 0.073, 0.029, 0.028, and 0.016, respectively. eGFR increased
+from raw 0.067 to matched 0.201. Vasopressor and MAP were unavailable because
+of hospital-level informative missingness; ventilation was omitted because the
+APACHE day-1 proxy can post-date T0. This explains why eICU is supplementary
+and why its mortality/ascertainment failures cannot be repaired within the
+frozen clean model.
+
+### Gate checks
+
+- ✅ v3.3 freeze committed before outcome execution.
+- ✅ Strict-before-T0 values preserved; uniform display labels emitted.
+- ✅ MIMIC primary = 23 covariates; eICU clean supplementary set omits
+  vaso/MAP/vent.
+- ✅ All pooled and eGFR-stratified match rates exceeded 90%.
+- ✅ OR and RD with HC1 reported throughout; DR used for residual imbalance.
+- ✅ Formal treatment-by-eGFR interaction and prespecified subgroups completed
+  in both databases.
+- ✅ `02_psm.R`/`03_hte.R` pooled OR reconciliation passed in both databases.
+- ✅ Patient-level pairs remained on Tempest.
+- ⚠️ Yan's aortic max-SMD/violation-count hypothesis was not supported.
+- ⚠️ MIMIC has a small non-null 48-hour mortality DR RD under all/censored
+  controls and significant mortality interaction.
+- ❌ eICU fails mortality falsification and has differential post-Cr
+  ascertainment; it is supplementary only.
+
+### Artifacts
+
+Aggregate CSVs committed:
+
+- five `did_riskset_*` files and five matching `psm_balance_*` files;
+- five `did_binary_*` files (four v3.3 models plus MIMIC S2-without-aortic);
+- `did_hte_{mimic,eicu}.csv` and
+  `did_hte_interact_{mimic,eicu}.csv`;
+- four `probe_nopost_cr_*` files;
+- `probe_eicu_underadjustment.csv`.
+
+Patient-level, Tempest only:
+
+- five `did_pairs_primary_yet_untreated_*` files.
+
+### State block
+
+- Frozen: v3.3, strict-before-T0 measured covariates, MIMIC S2+aortic primary,
+  eICU base+aortic supplementary with vaso/MAP/vent omitted.
+- Completed: full m=20 pooled + eGFR-stratified experiment, both HTE runs,
+  S2-without-aortic sensitivity, mortality and ascertainment diagnostics.
+- Interpretation: MIMIC shows robust pooled AKI harm and a strong stage >=1
+  renal-reserve gradient, but the mortality interaction and small 48-hour
+  mortality RD prevent an unqualified causal HTE claim. eICU gives limited
+  stage >=1 directional support only and fails falsification.
+- Pending after review: supervisor interpretation, then Phase 7 IUH external
+  validation if approved. No IUH work was started.
+
+>>> STOP. v3.3 full results are ready for supervisor review; do not start IUH or alter the frozen model. <<<

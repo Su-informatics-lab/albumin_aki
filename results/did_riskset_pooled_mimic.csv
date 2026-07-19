@@ -1,2 +1,2 @@
-"db","variant","stratum","treated_eligible","matched","match_rate","caliper","max_smd","n_viol"
-"MIMIC","pooled","Overall",5428,5428,1,0.0629611809695803,0.263317698312185,4
+"db","database_role","analysis_set","variant","stratum","ps_covariates","treated_eligible","matched","match_rate","caliper","max_smd","n_viol"
+"MIMIC","primary","primary","pooled","Overall",23,5428,5428,1,0.0630186839045528,0.270902822581437,4

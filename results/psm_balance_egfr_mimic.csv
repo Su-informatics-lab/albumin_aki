@@ -1,64 +1,67 @@
-"db","variant","stratum","variable","smd"
-"MIMIC","egfr","G1","age",0.0922843073778911
-"MIMIC","egfr","G1","is_female",0.111343162106342
-"MIMIC","egfr","G1","bmi",0.0260618363129037
-"MIMIC","egfr","G1","surg_cabg",0.0666757264545214
-"MIMIC","egfr","G1","surg_valve",0.0113617299891723
-"MIMIC","egfr","G1","surg_combined",0.049535814907482
-"MIMIC","egfr","G1","heart_failure",0.0751340249951369
-"MIMIC","egfr","G1","hypertension",0.0209904570242683
-"MIMIC","egfr","G1","diabetes",0.0179978786408757
-"MIMIC","egfr","G1","copd",0.0849719645321434
-"MIMIC","egfr","G1","pvd",0.0518419337004581
-"MIMIC","egfr","G1","stroke",0.0643733334216976
-"MIMIC","egfr","G1","liver_disease",0.0787274253583508
-"MIMIC","egfr","G1","last_lactate",0.0271843723106516
-"MIMIC","egfr","G1","last_lactate_missing",0.0112914513809332
-"MIMIC","egfr","G1","last_heartrate",0.0362829491616861
-"MIMIC","egfr","G1","last_hemoglobin",0.0794833905986345
-"MIMIC","egfr","G1","alb_cat",0.220591962989453
-"MIMIC","egfr","G1","vaso_at_t0",0.046167459223276
-"MIMIC","egfr","G1","map_before_t0",0.0298378328741049
-"MIMIC","egfr","G1","vent_at_t0",0.0358400547845093
-"MIMIC","egfr","G2","age",0.0375800295482695
-"MIMIC","egfr","G2","is_female",0.109387114204814
-"MIMIC","egfr","G2","bmi",0.0466259550898292
-"MIMIC","egfr","G2","surg_cabg",0.0026581504706423
-"MIMIC","egfr","G2","surg_valve",0.0107488332093368
-"MIMIC","egfr","G2","surg_combined",0.00506080224895062
-"MIMIC","egfr","G2","heart_failure",0.0870049412861216
-"MIMIC","egfr","G2","hypertension",0.0377277307687293
-"MIMIC","egfr","G2","diabetes",0.139839026146316
-"MIMIC","egfr","G2","copd",0.0334937158917265
-"MIMIC","egfr","G2","pvd",0.0789668406212247
-"MIMIC","egfr","G2","stroke",0.0286674574182129
-"MIMIC","egfr","G2","liver_disease",0.0342333902894854
-"MIMIC","egfr","G2","last_lactate",0.0620855006522655
-"MIMIC","egfr","G2","last_lactate_missing",0.0203787956876942
-"MIMIC","egfr","G2","last_heartrate",0.145199220775762
-"MIMIC","egfr","G2","last_hemoglobin",0.107045081730816
-"MIMIC","egfr","G2","alb_cat",0.233371296176376
-"MIMIC","egfr","G2","vaso_at_t0",0.0216528763221055
-"MIMIC","egfr","G2","map_before_t0",0.0846945442151326
-"MIMIC","egfr","G2","vent_at_t0",0.0130270796996897
-"MIMIC","egfr","G3plus","age",0.104402556455319
-"MIMIC","egfr","G3plus","is_female",0.0892487929608722
-"MIMIC","egfr","G3plus","bmi",0.0283126848547522
-"MIMIC","egfr","G3plus","surg_cabg",0.0459042698530947
-"MIMIC","egfr","G3plus","surg_valve",0.0471987371936083
-"MIMIC","egfr","G3plus","surg_combined",0.134061617450113
-"MIMIC","egfr","G3plus","heart_failure",0.0229032876442688
-"MIMIC","egfr","G3plus","hypertension",0.12381638759582
-"MIMIC","egfr","G3plus","diabetes",0.0999401447386215
-"MIMIC","egfr","G3plus","copd",0.140465874163505
-"MIMIC","egfr","G3plus","pvd",0.0454462020255818
-"MIMIC","egfr","G3plus","stroke",0.0957606750310091
-"MIMIC","egfr","G3plus","liver_disease",0.092173839308744
-"MIMIC","egfr","G3plus","last_lactate",0.100932175481755
-"MIMIC","egfr","G3plus","last_lactate_missing",0.0358875536655408
-"MIMIC","egfr","G3plus","last_heartrate",0.0824176779166061
-"MIMIC","egfr","G3plus","last_hemoglobin",0.245567756790941
-"MIMIC","egfr","G3plus","alb_cat",0.350284722052029
-"MIMIC","egfr","G3plus","vaso_at_t0",0.0264297772395117
-"MIMIC","egfr","G3plus","map_before_t0",0.0266744400502805
-"MIMIC","egfr","G3plus","vent_at_t0",0.0909349565277417
+"db","database_role","analysis_set","variant","stratum","variable_code","variable","raw_smd","smd","raw_comparison"
+"MIMIC","primary","primary","egfr","G1","age","age",0.29830439484834,0.0665388718387153,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","is_female","sex",0.0681333527614577,0.0526896777141722,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","bmi","BMI",0.0968478105260791,0.00981515755150666,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","surg_cabg","CABG surgery",0.109428631572214,0.0533731287763991,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","surg_valve","valve surgery",0.197477939493227,0.0239075401105611,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","surg_combined","combined surgery",0.189827412558114,0.0618297859433823,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","heart_failure","heart failure",0.0574508712624877,0.111236018232804,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","hypertension","hypertension",0.0506448882803802,0.00569008977357017,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","diabetes","diabetes",0.0341940923942913,0.0419699793285979,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","copd","COPD",0.0109127522885963,0.00190842379326836,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","pvd","peripheral vascular disease",0.000574430539431036,0.0335204390741603,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","stroke","stroke",0.00324533116995127,0.104978691145309,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","liver_disease","liver disease",0.0589195568002426,0.0931051345232577,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","last_lactate","baseline (at ICU T0): lactate",0.0861946911638237,0.00957798252192638,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","last_lactate_missing","baseline (at ICU T0): lactate missing",0.737878281604241,0.0288195906711187,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","last_heartrate","baseline (at ICU T0): heart rate",0.320700788985489,0.0871345048712941,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","last_hemoglobin","baseline (at ICU T0): hemoglobin",0.715205522945024,0.0912515092222441,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","alb_cat","baseline (at ICU T0): serum albumin category",0.132839715634162,0.219519981860756,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","vaso_at_t0","baseline (at ICU T0): vasopressor status",0.583910814361931,0.0132126004367309,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","map_before_t0","baseline (at ICU T0): MAP",0.600751311773064,0.00892527416904142,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","vent_at_t0","baseline (at ICU T0): ventilation status",0.055592679630004,0.0593279071921639,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G1","surg_aortic","aortic surgery",0.0787700819066787,0.0319127234715009,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","age","age",0.15204840750777,0.0185220686046524,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","is_female","sex",0.0147021701941077,0.0815742904053774,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","bmi","BMI",0.00298418288910962,0.0418808866243835,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","surg_cabg","CABG surgery",0.061891164015026,0.00665556474446042,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","surg_valve","valve surgery",0.214802445219828,0.00456983930215665,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","surg_combined","combined surgery",0.30269811667278,0.00335630672548571,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","heart_failure","heart failure",0.0405599629226756,0.0747338770868818,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","hypertension","hypertension",0.0279427446635303,0.0574973475864674,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","diabetes","diabetes",0.0376627875921352,0.0688432007552426,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","copd","COPD",0.0300435378587969,0.0123192932560052,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","pvd","peripheral vascular disease",0.0128095189589313,0.0883746980242771,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","stroke","stroke",0.0248441338027728,0.0763282298063677,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","liver_disease","liver disease",0.0253815415574894,0.0612338251540129,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","last_lactate","baseline (at ICU T0): lactate",0.122677901884739,0.0929737925333011,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","last_lactate_missing","baseline (at ICU T0): lactate missing",1.0125747486617,0.00563611722946245,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","last_heartrate","baseline (at ICU T0): heart rate",0.271511418337921,0.177817662109879,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","last_hemoglobin","baseline (at ICU T0): hemoglobin",0.608437636809975,0.0814299374163141,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","alb_cat","baseline (at ICU T0): serum albumin category",0.249845523776028,0.255697729365189,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","vaso_at_t0","baseline (at ICU T0): vasopressor status",0.755907229929587,0.0473081369527483,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","map_before_t0","baseline (at ICU T0): MAP",0.5836421929259,0.0805816259321651,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","vent_at_t0","baseline (at ICU T0): ventilation status",0.433006910182393,0.0637169855951486,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G2","surg_aortic","aortic surgery",0.113171804175378,0.144022619928196,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","age","age",0.00555335430419323,0.177039452460965,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","is_female","sex",0.0119246762213726,0.121347609775981,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","bmi","BMI",0.0692640075783506,0.0451816902511567,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","surg_cabg","CABG surgery",0.26951476510465,0.0459042698530947,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","surg_valve","valve surgery",0.226587812508371,0.0697030223911861,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","surg_combined","combined surgery",0.334919284304166,0.1680823223561,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","heart_failure","heart failure",0.21348702223611,0.0890908736965569,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","hypertension","hypertension",0.113595238679785,0.0952949434743617,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","diabetes","diabetes",0.00260263151925759,0.136262106041815,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","copd","COPD",0.0497143499674223,0.0744972754351547,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","pvd","peripheral vascular disease",0.00644701364609661,0.0248182088900927,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","stroke","stroke",0.117213962997211,0.0887228589343768,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","liver_disease","liver disease",0.145543969394626,0.188130616587082,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","last_lactate","baseline (at ICU T0): lactate",0.0988006624059841,0.111929519574238,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","last_lactate_missing","baseline (at ICU T0): lactate missing",1.67073266638007,0.0211340271292935,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","last_heartrate","baseline (at ICU T0): heart rate",0.0654694819341571,0.222850598126777,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","last_hemoglobin","baseline (at ICU T0): hemoglobin",0.557425167226244,0.241823579621053,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","alb_cat","baseline (at ICU T0): serum albumin category",0.457562637593234,0.412935365493335,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","vaso_at_t0","baseline (at ICU T0): vasopressor status",0.934461941630389,0.0158335215361095,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","map_before_t0","baseline (at ICU T0): MAP",0.570316603019543,0.00781119960781454,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","vent_at_t0","baseline (at ICU T0): ventilation status",0.989948655619022,0.0306860610689773,"eligible ever-treated vs never-treated source cohort"
+"MIMIC","primary","primary","egfr","G3plus","surg_aortic","aortic surgery",0.191757035507311,0.0520963097539654,"eligible ever-treated vs never-treated source cohort"
