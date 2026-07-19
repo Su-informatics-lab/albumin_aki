@@ -2258,3 +2258,115 @@ Patient-level, Tempest only:
   validation if approved. No IUH work was started.
 
 >>> STOP. v3.3 full results are ready for supervisor review; do not start IUH or alter the frozen model. <<<
+
+---
+
+## Entry 18 — Supervisor review of Entry 17: strong finding, one caveat to defuse before IUH  (2026-07-19, Claude)
+
+Excellent, complete run. **The MIMIC finding is strong and headline-worthy:** albumin → AKI with a
+**formally-significant, monotonic renal-reserve gradient**. KDIGO≥1 DR: pooled OR 1.88 (RD +12.3 pp);
+gradient G1 +7.9 → G2 +14.4 → G3+ +22.0 pp; **interaction OR per +30 eGFR 0.42 (48h)/0.47 (7d), P<.001**,
+directionally replicated in eICU stage≥1 (0.62/0.70, P<.001). Robust to aortic in/out (S2-no-aortic OR 2.08).
+Large RDs — not sparse artifacts. This is the paper's core.
+
+**Three adjudications:**
+1. **Yan's aortic-balance hypothesis: not supported** (max SMD 0.271 with vs 0.263 without; it improved
+   eGFR/Hb/HF axes but worsened alb_cat). Report to Yan. **Keep `surg_aortic`** for face validity/completeness
+   — Codex correctly did NOT drop it after seeing outcomes (that would be selecting on the outcome).
+2. **eICU stays supplementary** — confirmed under-adjusted (no vaso/MAP; vent omitted), fails falsification,
+   differential post-Cr ascertainment. Directional stage≥1 support only.
+3. **The one loose end = the mortality caveat.** MIMIC 48h mortality is mildly non-null under all/crossover
+   controls (DR RD **+0.43 pp**, P=.004) **but NULL under never-treated controls (+0.07 pp, P=.60)** and
+   ~null at 7d — the signature of a **crossover / immortal-time residual** (later-treated-control deaths),
+   not a real albumin→death effect. However, mortality **also modifies by eGFR** (P=.002/‹.001), so the AKI
+   HTE cannot yet be claimed free of shared severity/competing-risk confounding.
+
+**Decision — do NOT start IUH yet. Run a focused mortality/competing-risk self-correction suite first**
+(this is the mg_aki playbook: probe the falsification signal, isolate treatment vs selection):
+- **P-A (highest value): never-treated-only controls** sensitivity for BOTH the falsification AND the AKI
+  eGFR-HTE. Mortality is null there; if the AKI gradient survives (expected), it largely defuses the caveat.
+- **P-B: death as a competing risk** for AKI (and/or death-censored / IPCW sensitivity) — does the eGFR
+  gradient hold when death is handled properly? Standard reviewer ask.
+- **P-C: crossover characterization** — quantify how much of the all-controls 48h mortality is
+  later-treated-control deaths (confirm the all-vs-never-treated divergence mechanism).
+- Optional **P-D: earliest-labs severity sensitivity** (à la mg) to show the residual mortality is
+  lab-timing/selection, not treatment.
+
+Interpretation rule: if the AKI gradient survives never-treated + competing-risk and the mortality signal
+is shown to be crossover/selection, we have a defensible paper → proceed to **IUH external validation +
+manuscript**. If the gradient collapses under competing-risk, it was partly a mortality-selection artifact
+and we reframe honestly. Keep the frozen v3.3 model; these are sensitivities, not a re-selection.
+
+>>> APPROVED as the main result (MIMIC primary). Aortic kept; eICU supplementary. Run the mortality/competing-risk probe suite (P-A..P-C) before IUH; report Entry 19; STOP. <<<
+
+---
+
+## Entry 18b — Supervisor: KDIGO≥2 non-monotone in eGFR — NOT Simpson; lead with ≥1  (2026-07-19, Claude)
+
+Haining flagged that KDIGO≥2 (48h & 7d) is non-monotone across eGFR (small-big-small, peak at G2),
+unlike the clean monotone ≥1. Adjudication:
+
+- **Not Simpson's paradox.** Pooled ≥2 (DR OR 1.97 48h / 1.92 7d) is **not reversed** vs the strata — every
+  stratum is OR>1 (harm) and pooled ≈ a weighted average. Simpson requires a direction reversal between
+  pooled and within-stratum; absent here. This is heterogeneity, not paradox.
+- **It's genuine non-monotone modification + partly a KDIGO-definition artifact.** The formal linear
+  interaction confirms it: ≥1 → OR per +30 eGFR **0.42 (48h)/0.47 (7d), P<.001** (strong, monotone);
+  **≥2-48h → 0.80, P=.189 (ns)** — a *linear* eGFR term cannot fit an inverted-U, so it reads flat; ≥2-7d
+  0.70, P=.008 (weaker). ≥3 0.19/0.29 P<.001 but sparse.
+- **Why the ≥2 inverted-U:** (a) KDIGO stage-2/3 use **ratio thresholds** (≥2.0× / ≥3.0× or ≥4.0 mg/dL)
+  that are **baseline-Cr-dependent**; at G3+ (high baseline Cr) albumin's excess AKI piles into **stage-1**
+  (G3+ ≥1 RD **+22 pp**) while the marginal **stage-2 is muted/ceiling** (G3+ ≥2 RD only **+1.4 pp**, ns,
+  36/30 events); (b) **sparsity at G3+** for ≥2 (CI crosses 1) → the "drop" is partly noise. The ≥1
+  endpoint (Δ0.3 / ratio1.5) is far less baseline-dependent, hence its clean monotone gradient.
+- **Conclusion:** eGFR is a strong, clean **single** modifier for **any-AKI (≥1)**; it is **not a clean
+  sole/linear modifier for severity-specific (≥2)**. Haining's second hypothesis is half-right.
+
+Decisions:
+- **Primary modification endpoint = KDIGO≥1** (clean, monotone, P<.001, large RD, definition-robust).
+  ≥2/≥3 are **secondary**; do not over-interpret their per-stratum non-monotonicity; report the ≥2
+  interaction P honestly (48h ns).
+- Add to the probe suite (run with mortality P-A..P-C, before IUH):
+  - **P-E** stage-distribution by eGFR × arm — where does the excess AKI land (stage 1/2/3)?
+  - **P-F** KDIGO-definition sensitivity — absolute-Δ-only / fixed-threshold stage-2 — is the ≥2 pattern a ratio-threshold artifact?
+  - **P-G** continuous-eGFR spline (mg `05a_egfr_spline.R`) for ≥1 vs ≥2 — monotone vs inverted-U, directly tests "is eGFR a good single modifier."
+  - **P-H (optional/exploratory)** baseline serum-albumin as a co-modifier (eGFR × alb crossed phenotype).
+
+>>> Recorded: lead with KDIGO≥1; ≥2/≥3 secondary; add severity/eGFR-modifier probes P-E..P-H to the pre-IUH suite. <<<
+
+---
+
+## Entry 18c — Supervisor: pre-specified HTE effect-modifier sweep (what interacts with eGFR?)  (2026-07-19, Claude)
+
+Haining's hypothesis: the heterogeneity is not eGFR alone but a **two-way interaction** (eGFR × something).
+This is the highest-value and highest-false-discovery-risk step, so it runs under strict anti-shopping
+discipline (LESSONS §1): pre-specified candidate list, multiplicity correction, and **full transparent
+reporting of the entire sweep** — "don't hide" means report everything, not cherry-pick a hit.
+
+**Design (all on the frozen v3.3 matched pairs; pair-preserving subsetting; no re-match, no PS change):**
+- **Primary HTE outcome = KDIGO≥1** (48h & 7d; the clean, definition-robust endpoint). ≥2 secondary.
+  Report interaction on **both** the multiplicative (OR) and additive (RD) scales.
+- **Step 1 — single-modifier scan.** For each pre-specified candidate M, `treatment × M` interaction (HC1),
+  extending `03_hte.R`. Candidates (pre-T0, both arms): eGFR (linear + spline/quartile), baseline creatinine,
+  age, hemoglobin, lactate, MAP; alb_cat, heart_failure, diabetes, hypertension, CKD history, surgery type
+  (CABG/valve/combined/aortic), vaso_at_t0, vent_at_t0, sex. **Benjamini-Hochberg FDR** across the list;
+  report raw + q. A modifier counts only if q<0.05 **and** monotone/sensible **and** not driven by a <20-event cell.
+- **Step 2 — two-way / competing-modifier (the core question).** For survivors + the pre-registered pairs
+  **eGFR × alb_cat** and **eGFR × baseline-Cr**: (a) 3-way `treatment × eGFR × M`; (b) **competing-modifier** —
+  fit `treatment×eGFR` and `treatment×M` jointly; does `treatment×eGFR` survive (eGFR is the real axis) or
+  collapse (M absorbs it → eGFR was a proxy)?; (c) bivariate **CATE grid** (albumin OR & RD in the eGFR×M
+  cells, grey <20-event cells).
+- **Step 3 — data-driven (exploratory).** Causal forest / R-learner CATE on the matched pairs over all pre-T0
+  covariates: omnibus heterogeneity test, variable importance for effect-modification, partial-dependence of
+  CATE on the top vars (esp. eGFR + its top partner). Hypothesis-generating, not confirmatory.
+- **Step 4 — mechanistic treated-only (associational).** Albumin **product (5% iso-oncotic vs 25%
+  hyperoncotic)** and **dose** vs AKI, overall and across eGFR — hyperoncotic albumin has a known
+  osmotic-nephrosis mechanism; a product/dose × eGFR pattern would be mechanistically important. Clearly
+  labeled within-treated, not a causal contrast.
+
+**Guard rails:** pre-specified list only (no post-hoc additions to chase significance); FDR across the list;
+interaction tests are underpowered → everything here is **hypothesis-generating** until it survives
+correction, is clinically sensible, is not sparse-driven, and **replicates** (eICU direction now, IUH later);
+report the WHOLE sweep (all candidates, both scales, raw+q), never a cherry-picked cell; OR + RD both.
+This also directly tests whether the KDIGO≥2 non-monotonicity (Entry 18b) is explained by a second modifier.
+
+>>> Recorded: pre-specified, FDR-controlled HTE modifier sweep + competing-modifier (eGFR vs M) + bivariate CATE + optional causal forest. Run with the Entry 18b probes; report Entry 19; STOP. Full transparent reporting. <<<

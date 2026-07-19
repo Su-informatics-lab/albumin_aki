@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Formal treatment-by-eGFR interaction and prespecified subgroups.
 # Uses the pooled canonical pairs and shared outcome/OR implementation.
-# Usage: Rscript 03_hte.R {mimic|eicu}
+# Usage: Rscript 03_hte.R {mimic|eicu} [standard|sweep]
 
 suppressPackageStartupMessages({
   library(sandwich)
@@ -9,15 +9,22 @@ suppressPackageStartupMessages({
 })
 
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) != 1 || !(tolower(args[1]) %in% c("mimic", "eicu"))) {
-  stop("Usage: Rscript 03_hte.R {mimic|eicu}")
+if (!(length(args) %in% c(1, 2)) ||
+    !(tolower(args[1]) %in% c("mimic", "eicu")) ||
+    (length(args) == 2 && !(tolower(args[2]) %in% c("standard", "sweep")))) {
+  stop("Usage: Rscript 03_hte.R {mimic|eicu} [standard|sweep]")
 }
 tag <- tolower(args[1])
+mode <- if (length(args) == 2) tolower(args[2]) else "standard"
+if (mode == "sweep" && tag != "mimic") {
+  stop("The Entry-18c sweep is frozen to MIMIC only")
+}
 db <- toupper(tag)
 file_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 file_arg <- sub("^--file=", "", file_arg[1])
 script_dir <- dirname(normalizePath(file_arg))
 source(file.path(script_dir, "R", "causal_helpers.R"))
+source(file.path(script_dir, "R", "covariate_registry.R"))
 RESULTS <- path.expand("~/albumin_aki/results")
 
 all_pts <- read.csv(
@@ -35,6 +42,12 @@ canonical <- read.csv(
   file.path(RESULTS, sprintf("did_binary_pooled_%s.csv", tag)),
   stringsAsFactors = FALSE
 )
+
+if (mode == "sweep") {
+  source(file.path(script_dir, "R", "hte_sweep.R"))
+  run_hte_sweep(tag, all_pts, pairs, RESULTS)
+  quit(save = "no", status = 0)
+}
 
 trt_rows <- match(pairs$trt_pid, all_pts$pid)
 if (any(is.na(trt_rows))) stop("Pair treated IDs do not map to did_all")

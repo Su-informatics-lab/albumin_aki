@@ -36,7 +36,11 @@ case $step in
     Rscript probe_nopost_cr.R eicu egfr
     Rscript probe_eicu_underadjustment.R
     ;;
-*)  echo "Unknown step: $step (valid: 1-3)" ;;
+4)
+    log "4" "Frozen-pair HTE modifier sweep (MIMIC only; no rematching)"
+    Rscript 03_hte.R mimic sweep 2>&1 | tee logs/03_hte_sweep_mimic.log
+    ;;
+*)  echo "Unknown step: $step (valid: 1-4)" ;;
 esac
 done
 echo -e "\n$SEP\n  DONE\n$SEP"
