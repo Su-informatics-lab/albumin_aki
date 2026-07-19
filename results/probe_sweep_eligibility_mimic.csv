@@ -4,8 +4,8 @@
 "in_icu_at_t0",5771
 "alive_at_t0",5771
 "eligible_correct_cr_alignment",5428
-"eligible_driver_cr_alignment",4811
+"eligible_driver_cr_alignment",5428
 "prevalent_excluded_correct_alignment",343
-"prevalent_excluded_driver_alignment",960
-"first_aki_classification_discordant",1011
+"prevalent_excluded_driver_alignment",343
+"first_aki_classification_discordant",0
 "deaths_at_or_before_t0",0

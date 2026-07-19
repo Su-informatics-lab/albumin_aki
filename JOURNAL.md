@@ -1287,3 +1287,190 @@ Selection criterion is unchanged (Entry 8b): pick the frozen set by **falsificat
 Then we freeze the selected set (re-run at m=20) and I release stratified + eICU + HTE.
 
 >>> APPROVED: Cr-fix + verification gate + m=5 sweep + clinical covariate order. Run S0–S5 MIMIC pooled, STOP with the sweep table. <<<
+
+---
+
+## Entry 11 — Corrected m=5 MIMIC sweep; balance guard-rail STOP  (2026-07-18, Codex)
+
+### Gate status
+
+**STOPPED at the MIMIC pooled sweep gate.** The approved Cr-list repair reproduced the mandatory
+5,428 eligible-treated / 343 prevalent-AKI-exclusion gate exactly. The corrected m=5 invocation then
+produced the complete S0-S5 aggregate sweep, but balance deteriorated unexpectedly beginning at S3
+(maximum SMD 0.498) and remained poor at S4/S5. I ran aggregate-only S3 and S4 balance probes and did
+not change the PS, matching rule, estimator, covariates, or outcomes.
+
+No S6, m=20 final model, eGFR-stratified model, eICU model, HTE model, or downstream experiment was run.
+No adjustment set is frozen in this entry.
+
+### Approved repair and verification
+
+The driver now constructs the Cr list from one deterministically ordered object:
+
+```r
+ordered <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
+cr_list <- split(ordered[, c("labresult", "offset_h")], ordered$pid)
+```
+
+The pre-sweep aggregate probe returned:
+
+| Check | n |
+|---|---:|
+| Treated total | 5,771 |
+| Early reference on/before T0 | 5,771 |
+| In ICU at T0 | 5,771 |
+| Alive at T0 | 5,771 |
+| Eligible, correct Cr alignment | 5,428 |
+| Eligible, driver Cr alignment | 5,428 |
+| Prevalent-AKI excluded, correct alignment | 343 |
+| Prevalent-AKI excluded, driver alignment | 343 |
+| First-AKI classification discordant | 0 |
+| Death at/before treated T0 | 0 |
+
+The registry is cumulative in the Entry 10 clinical order: S0 base; S1 + vasopressor at T0; S2 + MAP
+before T0 and ventilation at T0; S3 + extended labs; S4 + pre-T0 RBC/crystalloid/urine; S5 + aortic and
+prior cardiac surgery. S6 remains optional and was not run. The deliberately excluded variables remain
+excluded.
+
+Static fixtures passed:
+
+```text
+PASS: non-event coding, two-reference baseline/tie rule, within-stratum matching,
+fixed mortality, OR/RD utility
+```
+
+Aggregate validation also passed: 204 sweep rows, all six sets present with 34 rows per set, m=5
+recorded throughout, and no patient identifiers in either balance-probe CSV.
+
+### Matching and balance
+
+| Set | Matched / eligible | Match rate | Max SMD | SMD > 0.1 | Covariates |
+|---|---:|---:|---:|---:|---:|
+| S0 | 5,427 / 5,428 | 99.98% | 0.209 | 4 | 19 |
+| S1 | 5,427 / 5,428 | 99.98% | 0.248 | 3 | 20 |
+| S2 | 5,428 / 5,428 | 100.00% | 0.256 | 5 | 22 |
+| S3 | 5,428 / 5,428 | 100.00% | 0.498 | 10 | 28 |
+| S4 | 5,428 / 5,428 | 100.00% | 0.445 | 17 | 31 |
+| S5 | 5,428 / 5,428 | 100.00% | 0.472 | 20 | 33 |
+
+The faithful S3 probe (using the same S0-S5 MICE variable universe as the sweep) found the largest
+imbalances in `alb_cat` (0.498), BUN (0.361), eGFR (0.354), heart rate (0.230), heart failure (0.198),
+INR (0.157), liver disease (0.149), stroke (0.133), hemoglobin (0.133), and hematocrit (0.122).
+
+At S4, the largest SMDs were BUN (0.445), `alb_cat` (0.337), lactate-missing (0.329), eGFR (0.324),
+female sex (0.277), vasopressor (0.265), platelet (0.233), bicarbonate (0.219), urine before T0
+(0.166), hemoglobin (0.165), ventilation (0.158), RBC before T0 (0.151), heart failure (0.147),
+crystalloid before T0 (0.137), hypertension (0.118), hematocrit (0.111), and INR (0.107).
+
+Thus the problem is broad residual imbalance after risk-set matching, not merely imbalance in one newly
+added covariate. Match rate did not collapse, but a high match rate does not rescue the balance failure.
+MICE reported 50 logged events; this is retained in every aggregate row and has not been silently repaired.
+
+### Full sweep results
+
+The authoritative full inferential table is
+`results/covariate_sweep_mimic_pooled.csv`. It contains every S0-S5 × outcome × PSM/DR row with arm
+rates, OR, OR 95% CI and P, RD, RD 95% CI and P, plus match rate, maximum SMD, violation count,
+covariate count, and MICE logged-event count. The compact tables below show point estimates as
+**OR / RD percentage points**; CIs and P values remain in the committed CSV to avoid an unreadable
+168-cell inferential expansion here.
+
+#### Fixed-window mortality falsification
+
+PSM point estimates:
+
+| Outcome | S0 | S1 | S2 | S3 | S4 | S5 |
+|---|---:|---:|---:|---:|---:|---:|
+| 48h, all | 1.19 / +0.09 | 1.03 / +0.02 | 1.48 / +0.18 | 1.07 / +0.04 | 0.74 / -0.20 | 0.62 / -0.35 |
+| 48h, never treated | 1.05 / +0.02 | 0.92 / -0.05 | 1.00 / +0.00 | 0.73 / -0.19 | 0.31 / -0.91 | 0.24 / -1.23 |
+| 48h, crossover censored | 1.27 / +0.12 | 1.04 / +0.02 | 1.26 / +0.10 | 1.00 / -0.00 | 0.43 / -0.68 | 0.34 / -0.95 |
+| 7d, all | 0.92 / -0.11 | 0.66 / -0.63 | 0.80 / -0.31 | 0.62 / -0.76 | 0.89 / -0.15 | 0.86 / -0.20 |
+| 7d, never treated | 1.35 / +0.29 | 1.16 / +0.16 | 0.96 / -0.05 | 0.91 / -0.10 | 0.48 / -0.85 | 0.42 / -1.13 |
+| 7d, crossover censored | 1.35 / +0.28 | 1.16 / +0.16 | 1.04 / +0.05 | 1.03 / +0.03 | 0.50 / -0.82 | 0.44 / -1.10 |
+
+DR point estimates:
+
+| Outcome | S0 | S1 | S2 | S3 | S4 | S5 |
+|---|---:|---:|---:|---:|---:|---:|
+| 48h, all | 1.95 / +0.28 | 1.78 / +0.27 | 3.00 / +0.41 | 2.59 / +0.57 | 0.79 / -0.28 | 0.98 / -0.40 |
+| 48h, never treated | 1.34 / +0.08 | 1.13 / +0.04 | 1.45 / +0.09 | 1.14 / +0.20 | 0.25 / -0.70 | 0.41 / -0.87 |
+| 48h, crossover censored | 1.96 / +0.25 | 1.63 / +0.21 | 2.35 / +0.28 | 1.92 / +0.40 | 0.41 / -0.41 | 0.57 / -0.63 |
+| 7d, all | 1.44 / +0.30 | 1.13 / +0.05 | 1.51 / +0.31 | 1.43 / +0.62 | 1.41 / -0.28 | 1.82 / -0.35 |
+| 7d, never treated | 1.67 / +0.41 | 1.41 / +0.32 | 1.31 / +0.15 | 1.37 / +0.45 | 0.75 / -0.48 | 0.86 / -0.55 |
+| 7d, crossover censored | 1.78 / +0.44 | 1.52 / +0.36 | 1.57 / +0.31 | 1.83 / +0.65 | 0.87 / -0.30 | 0.82 / -0.37 |
+
+No set makes the mortality falsification consistently null on both scales, both horizons, both
+estimators, and all three crossover definitions. S1 is closest to null for the unadjusted matched-pair
+48h estimates and for the DR 7d-all RD, but its DR ORs remain elevated and its maximum SMD is 0.248.
+S4/S5 introduce strongly protective never-treated/censored mortality rather than de-confounding it.
+For S4/S5, some adjusted OR and linear-RD directions also disagree; that estimator instability is another
+reason not to freeze either set.
+
+#### AKI trajectory
+
+PSM point estimates:
+
+| Outcome | S0 | S1 | S2 | S3 | S4 | S5 |
+|---|---:|---:|---:|---:|---:|---:|
+| KDIGO >=1, 48h | 1.87 / +12.70 | 1.72 / +11.18 | 1.77 / +11.74 | 1.64 / +10.09 | 2.04 / +14.11 | 2.16 / +15.10 |
+| KDIGO >=2, 48h | 2.44 / +2.85 | 1.66 / +1.76 | 1.82 / +2.10 | 2.05 / +2.41 | 3.04 / +3.07 | 3.10 / +3.05 |
+| KDIGO >=3, 48h | 1.31 / +0.22 | 1.97 / +0.46 | 1.39 / +0.27 | 1.57 / +0.35 | 3.92 / +0.73 | 3.11 / +0.66 |
+| KDIGO >=1, 7d | 1.86 / +13.55 | 1.68 / +11.42 | 1.77 / +12.53 | 1.57 / +9.99 | 1.94 / +14.24 | 2.19 / +16.56 |
+| KDIGO >=2, 7d | 2.18 / +4.38 | 1.78 / +3.36 | 1.74 / +3.39 | 1.56 / +2.80 | 3.12 / +5.15 | 2.98 / +5.07 |
+| KDIGO >=3, 7d | 1.52 / +0.81 | 1.73 / +1.00 | 1.21 / +0.42 | 1.03 / +0.06 | 9.97 / +2.20 | 7.77 / +2.13 |
+| Stage >=2 or RRT, 48h | 2.30 / +2.97 | 1.72 / +2.03 | 1.77 / +2.20 | 1.95 / +2.49 | 3.37 / +3.55 | 3.34 / +3.51 |
+| Stage >=2 or RRT, 7d | 2.18 / +4.67 | 1.85 / +3.74 | 1.77 / +3.67 | 1.59 / +3.04 | 3.34 / +5.66 | 3.10 / +5.52 |
+
+DR point estimates:
+
+| Outcome | S0 | S1 | S2 | S3 | S4 | S5 |
+|---|---:|---:|---:|---:|---:|---:|
+| KDIGO >=1, 48h | 2.16 / +14.47 | 2.04 / +13.73 | 2.14 / +14.33 | 2.22 / +14.75 | 2.58 / +16.57 | 2.82 / +17.85 |
+| KDIGO >=2, 48h | 2.67 / +3.05 | 1.82 / +2.05 | 2.05 / +2.46 | 2.29 / +2.69 | 3.57 / +3.41 | 3.47 / +3.25 |
+| KDIGO >=3, 48h | 2.15 / +0.41 | 3.05 / +0.67 | 2.39 / +0.54 | 2.29 / +0.69 | 8.59 / +1.16 | 7.08 / +1.18 |
+| KDIGO >=1, 7d | 2.06 / +14.65 | 1.86 / +12.92 | 2.00 / +14.14 | 1.97 / +13.77 | 2.23 / +16.00 | 2.63 / +18.63 |
+| KDIGO >=2, 7d | 2.35 / +4.67 | 1.92 / +3.74 | 1.93 / +3.87 | 2.18 / +4.51 | 4.36 / +6.64 | 4.00 / +6.39 |
+| KDIGO >=3, 7d | 2.06 / +1.06 | 2.27 / +1.32 | 1.68 / +0.85 | 1.95 / +1.41 | 19.44 / +3.18 | 13.36 / +3.20 |
+| Stage >=2 or RRT, 48h | 2.65 / +3.34 | 1.98 / +2.51 | 2.08 / +2.73 | 2.38 / +3.11 | 4.09 / +4.03 | 3.90 / +3.84 |
+| Stage >=2 or RRT, 7d | 2.40 / +5.05 | 2.03 / +4.22 | 2.00 / +4.26 | 2.32 / +5.08 | 4.80 / +7.35 | 4.34 / +7.08 |
+
+The AKI estimates attenuate modestly from S0 toward S1/S3 for several PSM outcomes, then increase sharply
+at S4/S5. This cannot be used to select a set. The S4/S5 increase occurs alongside worse balance,
+protective mortality, and addition of near-path resuscitation variables.
+
+### S4 temporal rule and near-path warning
+
+S4 is mechanically strict pre-index: RBC is an indicator of any RBC before assigned T0, and crystalloid
+and urine are cumulative amounts with event time strictly less than assigned T0. There is no post-T0
+leakage in the implemented comparison. Nevertheless, these variables can lie very near the albumin
+decision and may represent the same evolving resuscitation episode, bleeding, or oliguria that prompts
+albumin. They therefore carry substantial interpretive risk as near-path adjustment even when timestamp
+compliant. The S4/S5 result pattern reinforces that warning.
+
+### Recommendation and decision needed
+
+By the precommitted falsification-plus-balance criterion, **no tested set is ready to freeze**. If one
+must be carried forward for focused review, **S1 is the least-bad provisional candidate** because it has
+the fewest SMD violations (3) and the closest-to-null PSM 48h mortality diagnostics; this is not a freeze
+recommendation because maximum SMD remains 0.248 and DR mortality is not consistently null.
+
+Supervisor decision is needed on whether to:
+
+1. reject the present pooled risk-set match as insufficiently balanced;
+2. authorize a prespecified diagnostic of why the scalar PS match worsens with S3-S5; or
+3. accept S1 provisionally and define an explicit balance remedy before any m=20 or external run.
+
+No flexible PS or outcome-driven set selection was attempted.
+
+### Aggregate artifacts and commits
+
+- `results/probe_sweep_eligibility_mimic.csv` — corrected 5,428/343 gate.
+- `results/covariate_sweep_mimic_pooled.csv` — complete 204-row S0-S5 table.
+- `results/probe_sweep_balance_S3_mimic.csv` and
+  `results/probe_sweep_balance_S4_mimic.csv` — aggregate-only balance diagnostics.
+- `efa71d6` — Cr-list repair, Entry 10 registry order, m=5 driver, and updated tests/design.
+- `0937e88`, `2f8ef7d` — aggregate balance-probe mode and faithful imputation-universe correction.
+
+No matched-pair file, spot-check file, or patient-level data is committed.
+
+>>> GUARD-RAIL STOP. Full corrected m=5 MIMIC pooled sweep reported; no set frozen. Await supervisor review. <<<
