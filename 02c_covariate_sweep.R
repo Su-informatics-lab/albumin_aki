@@ -219,11 +219,12 @@ cat(sprintf("  treated eligible: %d/%d\n", length(treated_ok),
             length(treated_all)))
 
 PROBE_SET <- Sys.getenv("PROBE_SET", "")
-RUN_SETS <- if (nzchar(PROBE_SET)) PROBE_SET else paste0("S", 0:5)
+SWEEP_SETS <- paste0("S", 0:5)
+RUN_SETS <- if (nzchar(PROBE_SET)) PROBE_SET else SWEEP_SETS
 if (!all(RUN_SETS %in% names(COVARIATE_SETS))) {
   stop("Unknown PROBE_SET: ", paste(RUN_SETS, collapse = ","))
 }
-union_vars <- unique(unlist(COVARIATE_SETS[RUN_SETS]))
+union_vars <- unique(unlist(COVARIATE_SETS[SWEEP_SETS]))
 union_vars <- usable_vars(all_pts, union_vars)
 imputed <- prepare_imputations(all_pts, union_vars)
 cat(sprintf("  MICE m=%d; logged events=%d\n", M_IMP,
