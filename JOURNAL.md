@@ -939,3 +939,130 @@ to the **Phase 2 freeze** and the **Phase 3 main experiment** authorized in Entr
 genuine new guard-rail hit.
 
 >>> APPROVED: tie rule A + ESKD re-filter. Proceed through Step A → Phase 2 freeze → Phase 3 main experiment. Stop at the Phase 3 results gate. <<<
+
+---
+
+## Entry 7 — Phase 3 guard-rail STOP after first production run  (2026-07-18, Codex)
+
+### Status
+
+**STOPPED after MIMIC pooled and before the other three main-experiment PSM runs.** The pooled match
+rate did not collapse, but the hospital-mortality falsification was strongly protective and the
+doubly robust stage-3 estimate reversed the unadjusted estimate. Both are genuinely surprising under
+the frozen design. Per the explicit guard rail, I wrote and ran an aggregate-only probe; I did not
+change the PS, switch estimators, launch the eGFR-stratified run, run either eICU model, or run HTE.
+
+Patient-level pairs remain only on Tempest. The committed result files are aggregate-only.
+
+### Step A closure
+
+The two Entry 6 fixes were applied without other ETL changes.
+
+- Maximum qualifying Cr at the selected timestamp now governs both `cr_ref_early` and `baseline_cr`
+  in both databases. The strengthened raw-stream probe passed both databases.
+- eICU medication-derived albumin was re-filtered to post-ESKD patient IDs.
+- eICU post-ESKD accounting now reconciles exactly: 25,822 = 3,778 with any accepted IV albumin +
+  22,044 without. Final eligibility is 2,298 treated and 16,778 controls.
+- The approved tie sensitivity reproduced 16,780 eICU controls under the minimum rule versus 16,778
+  under the frozen maximum rule. Because the main experiment stopped after the maximum-rule MIMIC
+  run, the requested primary-result immateriality check is not yet available and is not claimed.
+- MIMIC remained 5,771 treated / 6,889 controls. Descriptive treated prevalent AKI at own T0 was
+  343/5,771 in MIMIC and 222/2,298 in eICU.
+
+Implementation and aggregate commits:
+
+- `8334d1b` — approved Cr tie rule and eICU post-ESKD exposure re-filter.
+- `b27b7cd` — reviewed aggregate CONSORT refresh.
+
+### Phase 2 freeze and Phase 3 code gate
+
+- `0440907` is the distinct pre-run Phase 2 freeze commit. It renames the deferred landmark script
+  to `02b_landmark_sensitivity.R`, completes the reference sweep, and freezes
+  `STUDY_DESIGN.md` version 3.0 dated 2026-07-18.
+- `f2f9fd8` implements the two-argument contract
+  `Rscript 02_psm.R {mimic|eicu} {pooled|egfr}`, shared outcome/OR helpers, pooled and
+  within-G1/G2/G3+ matching, the frozen 21-variable pooled PS (19 variables within eGFR strata),
+  missing-post-Cr non-event coding, SCr-only KDIGO outcomes, the labeled stage>=2-or-RRT secondary,
+  mortality falsification, formal eGFR interaction wiring, and the arm-level no-post-Cr probe.
+- Static fixtures passed locally and on Tempest under R 4.5.1:
+  `PASS: non-event coding, two-reference baseline/tie rule, within-stratum matching`.
+- `02_psm.R` and `03_hte.R` use the same `pair_binary_or` helper; formal same-pair equality remains
+  unexecuted because HTE was correctly not launched after the guard stop.
+- `8133d8d` adds the aggregate-only mortality falsification probe.
+
+### MIMIC pooled run
+
+Command:
+
+```bash
+Rscript 02_psm.R mimic pooled
+```
+
+- Pair-time prevalent-AKI screen: 5,428/5,771 treated remained eligible.
+- Matched: 5,427/5,428 (99.98%); no match-rate collapse.
+- Post-match maximum absolute SMD: 0.202.
+- Five violations exceeded 0.10: heart failure 0.111, stroke 0.115, eGFR 0.193, last heart rate
+  0.103, and `alb_cat` 0.202. The frozen DR rule was therefore applied.
+- MICE completed with a warning that 200 events were logged; this has not been reinterpreted or
+  patched.
+
+Aggregate outcome estimates:
+
+| Outcome | PSM OR (95% CI) | Frozen DR OR (95% CI) |
+|---|---:|---:|
+| KDIGO >=1, 48h | 1.75 (1.61-1.91) | 1.94 (1.77-2.13) |
+| KDIGO >=2, 48h | 2.39 (1.90-3.01) | 2.58 (2.05-3.24) |
+| KDIGO >=3, 48h | 0.92 (0.63-1.37) | 2.09 (1.44-3.02) |
+| KDIGO >=1, 7d | 1.79 (1.64-1.95) | 1.94 (1.77-2.12) |
+| KDIGO >=2, 7d | 2.75 (2.28-3.33) | 3.09 (2.56-3.74) |
+| KDIGO >=3, 7d | 1.60 (1.19-2.16) | 2.90 (2.15-3.91) |
+| Stage >=2 or new RRT, 48h | 2.32 (1.86-2.90) | 2.62 (2.10-3.26) |
+| Stage >=2 or new RRT, 7d | 2.71 (2.25-3.25) | 3.12 (2.59-3.76) |
+| Hospital mortality falsification | 0.31 (0.25-0.37) | 0.55 (0.43-0.68) |
+
+The 48-hour stage-3 reversal (PSM 0.92 to DR 2.09) and strongly non-null mortality falsification are
+reported as instability, not selected around.
+
+### Guard-rail probe
+
+The pair-level mortality probe found:
+
+- 5,427 pair rows used only 2,409 unique controls; control effective sample size was 1,195.
+- Control reuse median was 1, P90 5, P99 11, maximum 23.
+- Pair-weighted mortality was 2.41% treated versus 7.48% control; unique-control mortality was 4.23%.
+- 11.9% of control pair rows were patients treated with albumin later. Their pair-weighted mortality
+  was 20.1%, versus 5.78% among never-treated controls.
+- Seven selected control rows had recorded death at or before pair T0 despite the existing
+  `icu_discharge_h > T0` at-risk screen; treated rows had zero.
+- The mortality imbalance was largest in earlier T0 quartiles (8.99%-9.80% control versus
+  1.33%-2.43% treated) and attenuated in the latest quartile (4.27% versus 3.54%).
+
+The required matched-pair missingness probe also ran for this one completed model:
+
+| Horizon | No post-Cr treated | No post-Cr control | Difference |
+|---|---:|---:|---:|
+| 48h | 4/5,427 (0.07%) | 37/5,427 (0.68%) | -0.61 percentage points |
+| 7d | 4/5,427 (0.07%) | 32/5,427 (0.59%) | -0.52 percentage points |
+
+Missing post-T0 Cr was coded as a non-event exactly as frozen. The differential is small in absolute
+terms but points in the direction that can inflate an apparent albumin-harm association and is
+therefore reported.
+
+### Supervisor decisions required before resuming
+
+1. Confirm the at-risk eligibility repair for mortality/death timing. Seven control pair rows have
+   `death_offset_h <= T0`; adding an explicit alive-at-T0 criterion is scientifically necessary but
+   changes the frozen implementation and therefore was not auto-applied.
+2. Specify how hospital mortality should be falsified when a yet-untreated control later receives
+   rescue albumin. Naively attributing all later hospital death to the control arm produced 20.1%
+   mortality in later-treated control rows. Options such as censoring at crossover require an
+   explicit estimand/inference decision.
+3. Review whether the observed control reuse/effective sample size and the large PSM-to-DR stage-3
+   reversal are acceptable under the frozen HC1/DR rule. I did not reach for a flexible PS or change
+   the replacement rule.
+
+Not run: MIMIC eGFR-stratified, eICU pooled, eICU eGFR-stratified, both HTE commands, and their
+no-post-Cr probes. Therefore no per-stratum estimates, eICU estimates, or treatment-by-eGFR
+interaction P values are available at this stopped gate.
+
+>>> GUARD-RAIL STOP. Awaiting supervisor review; do not resume the remaining main experiment or alter the frozen estimator. <<<

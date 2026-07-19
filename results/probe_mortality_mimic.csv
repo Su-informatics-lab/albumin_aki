@@ -1,0 +1,24 @@
+"section","metric","value"
+"overall","db","MIMIC"
+"overall","n_pairs","5427"
+"overall","unique_treated","5427"
+"overall","unique_controls","2409"
+"overall","control_effective_n","1195.06305538649"
+"overall","control_reuse_median","1"
+"overall","control_reuse_p90","5"
+"overall","control_reuse_p99","11"
+"overall","control_reuse_max","23"
+"overall","pair_weighted_mort_trt","0.0241385664271236"
+"overall","pair_weighted_mort_ctl","0.0748111295374977"
+"overall","unique_control_mort","0.0423412204234122"
+"overall","raw_final_treated_mort","0.0320568359036562"
+"overall","raw_final_control_mort","0.0322252866889244"
+"overall","control_later_treated_fraction","0.119402985074627"
+"overall","death_at_or_before_t0_trt","0"
+"overall","death_at_or_before_t0_ctl","7"
+"control_type","MIMIC|never_treated|4779|2180|0.05775267|68.27809|82.21599",NA
+"control_type","MIMIC|later_treated| 648| 229|0.20061728|69.60494|62.45371",NA
+"t0_quartile","MIMIC|[0.172,6.87]|1357|0.02431835|0.08990420|69.10243|68.82093|84.22991|79.36047",NA
+"t0_quartile","MIMIC|(6.87,9.94]|1357|0.01326455|0.09801032|67.76787|68.14591|84.59133|79.17749",NA
+"t0_quartile","MIMIC|(9.94,15.2]|1356|0.02359882|0.06858407|67.69100|68.56121|84.42614|80.21615",NA
+"t0_quartile","MIMIC|(15.2,338]|1357|0.03537214|0.04274134|66.47458|68.21813|84.13699|80.67141",NA
