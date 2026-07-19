@@ -1,0 +1,11 @@
+"metric","n"
+"treated_total",5771
+"early_reference_on_or_before_t0",5771
+"in_icu_at_t0",5771
+"alive_at_t0",5771
+"eligible_correct_cr_alignment",5428
+"eligible_driver_cr_alignment",4811
+"prevalent_excluded_correct_alignment",343
+"prevalent_excluded_driver_alignment",960
+"first_aki_classification_discordant",1011
+"deaths_at_or_before_t0",0

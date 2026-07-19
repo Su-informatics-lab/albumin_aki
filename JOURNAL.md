@@ -1151,3 +1151,97 @@ Run the sweep on **MIMIC pooled only**, then STOP with the sweep table (Entry 9)
 set that de-confounds mortality and then release the stratified + eICU + HTE runs.
 
 >>> Sweep authorized: MIMIC pooled, incremental pre-T0 covariates, OR+RD for all outcomes, select on falsification+balance (not AKI OR). STOP with the sweep table. <<<
+
+---
+
+## Entry 9 — Pre-sweep guard-rail STOP  (2026-07-18, Codex)
+
+### Status
+
+**STOPPED before MICE, matching, and every S0-S5 outcome estimate.** The sweep driver emitted a
+surprising treated-eligibility count (4,811 rather than the expected approximately 5,428), so I
+interrupted it immediately and ran an aggregate-only alignment probe. No sweep table exists and no
+covariate set is recommended or selected.
+
+No eGFR-stratified, eICU, HTE, landmark, S6, or outcome-analysis command was run.
+
+### Authorized utilities completed
+
+- `R/causal_helpers.R` now provides reusable `pair_or_rd()`, returning HC1 OR and absolute RD, each
+  with 95% CI and P, with the same optional DR covariate adjustment for both scales.
+- The helper also provides fixed-window death and continuous pair mean-difference/DiD utilities.
+- `R/covariate_registry.R` defines cumulative S0-S5 exactly in order:
+  S0 base; S1 + aortic surgery; S2 + ventilation at T0; S3 + vasopressor at T0; S4 + MAP before T0;
+  S5 + platelet, INR, BUN, bicarbonate, sodium, and hematocrit.
+- `02c_covariate_sweep.R` is restricted to MIMIC pooled and is wired to emit one tidy aggregate CSV
+  containing PSM and DR rows, OR/RD estimates for every binary outcome, DiD rows, match rate,
+  maximum SMD, and violation count.
+- Fixed-window mortality outcomes are wired at 48h and 7d for all controls, never-treated controls,
+  and crossover-censored controls. Whole-stay mortality is labeled descriptive.
+- The canonical risk-set predicate now includes alive at T0 for treated and controls.
+- `STUDY_DESIGN.md` version 3.1 documents the corrected mortality falsification and the
+  falsification-plus-balance selection rule before any sweep result.
+
+Pre-run commits:
+
+- `1985914` — freeze amendment to design version 3.1.
+- `5ac65d7` — ordered sweep registry, OR/RD utility, alive-at-T0 repair, driver, and tests.
+- `617b1a1` — aggregate-only eligibility alignment probe.
+
+Static fixtures passed locally and on Tempest:
+
+```text
+PASS: non-event coding, two-reference baseline/tie rule, within-stratum matching,
+fixed mortality, OR/RD utility
+```
+
+The registry test also asserts exact S0-S5 ordering, cumulative nesting, and absence of variables
+named as post/outcome/death/RRT.
+
+### Guard-rail event
+
+The interrupted command was:
+
+```bash
+Rscript 02c_covariate_sweep.R
+```
+
+It printed `treated eligible: 4811/5771`, compared with 5,428/5,771 under the reviewed canonical
+pair-time prevalent-AKI screen. The process was interrupted before MICE began; therefore no partial
+set result can be mistaken for a sweep result.
+
+The aggregate probe compared the driver's exact Cr-list construction with correctly aligned
+patient-sorted Cr:
+
+| Check | n |
+|---|---:|
+| Treated total | 5,771 |
+| Early reference on/before T0 | 5,771 |
+| In ICU at T0 | 5,771 |
+| Alive at T0 | 5,771 |
+| Eligible with correctly aligned Cr | 5,428 |
+| Eligible with driver alignment | 4,811 |
+| Prevalent-AKI excluded, correct alignment | 343 |
+| Prevalent-AKI excluded, driver alignment | 960 |
+| First-AKI classification discordant | 1,011 |
+| Death at/before treated T0 | 0 |
+
+Thus the Entry 8 alive-at-T0 repair is not responsible for the loss and behaves as expected.
+The cause is a driver-only row-alignment bug: the Cr data frame was sorted for the `split()` value
+rows, but the grouping vector remained in the original unsorted order. This assigned Cr sequences
+to the wrong patient keys and corrupted the prevalent-AKI screen.
+
+### Decision required
+
+Approve the mechanical repair to construct both arguments from the same sorted object:
+
+```r
+ordered <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
+cr_list <- split(ordered[, c("labresult", "offset_h")], ordered$pid)
+```
+
+After approval, rerun the eligibility probe first; require 5,428 eligible and 343 prevalent-AKI
+exclusions, then run S0-S5 MIMIC pooled and return the full OR/RD sweep table. No methodology,
+covariate ordering, estimator, or frozen outcome rule needs to change.
+
+>>> GUARD-RAIL STOP. Awaiting approval of the mechanical Cr-list alignment repair; no sweep result is available. <<<
