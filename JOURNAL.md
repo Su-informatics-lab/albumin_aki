@@ -695,3 +695,105 @@ streams and endpoint inputs stayed on Tempest.
   Phase 3 pair-indexed implementation.
 
 **STOP. Awaiting supervisor review of Entry 3; do not begin Phase 2.**
+
+---
+
+## Entry 4 — Supervisor review of Phase 1 + prevalent-AKI resolution  (2026-07-18, Claude)
+
+**Phase 1 accepted.** Cohort counts are sane and consistent with prior state (MIMIC 5,771/6,889;
+eICU 2,298/16,779; shifts of -7 / -13 treated are the expected result of the corrected anchor). All
+three focused probes pass both databases; T0 maps 1:1 to raw administration rows; baseline values are
+in range; eGFR recomputed from the emitted value. Good discipline: the missing-albumin-value hiccup
+was fixed in the *probe*, not the ETL, with no cohort auto-patch. The honest `icu_first_reference`
+labeling for never-treated patients (no last-pre-index anchor until a treated partner supplies index T0)
+is exactly right.
+
+**My Entry 2 wording was wrong and Codex was right to stop.** A last-pre-T0 Cr cannot be its own KDIGO
+reference for a prevalent-AKI screen. Resolution — freeze the engine's **two-reference** structure
+(mg design-canon §3 prevalent + §4 baseline):
+
+1. **`baseline_cr`** = last Cr strictly before index T0 (admit-window fallback). Role: reference for
+   **eGFR**, the **incident post-T0 KDIGO** outcome, and the **DiD**. *(Already implemented — keep.)*
+2. **`cr_ref_early`** = earliest qualifying reliable ICU Cr (admit-window fallback) — this is the
+   `icu_first_reference` logic Codex already built for controls, now exported for **all** patients.
+   Role: reference for the **prevalent-AKI-at-T0 screen only**.
+3. **Prevalent AKI at index T0** = the **max** Cr in `(cr_ref_early_time, index_T0]` meets KDIGO
+   (Δ ≥ 0.3 mg/dL or ratio ≥ 1.5) vs `cr_ref_early` → **exclude**. This is non-degenerate because the
+   reference is the early nadir, not the value being tested.
+4. **Application timing (risk-set-correct):** apply the prevalent-AKI exclusion **uniformly at each
+   match's index T0 for both arms in Phase 3** (a control's index T0 is unknown until matched).
+   Phase 1 does **not** apply it — that keeps the arms symmetric and avoids re-running ETL.
+
+**Phase 1 addendum (small, then STOP):**
+- Export `cr_ref_early` (earliest qualifying ICU Cr + offset + source) for **all** patients.
+- Emit a **descriptive** count (not an exclusion) of treated patients who would be prevalent-AKI at own
+  T0 under (3), for transparency, in the probe/CONSORT notes.
+- Do **not** apply the prevalent-AKI exclusion in Phase 1; it is a Phase 3 pair-indexed step.
+- Commit aggregates only; append Entry 5; STOP.
+
+This two-reference definition is **frozen into `STUDY_DESIGN.md` at Phase 2**. Everything else in
+Entry 3 is approved.
+
+**Phase 2 remains blocked on Dr. Yan's sign-off** ("risk-set primary + landmark sensitivity") plus my
+review of the Entry 5 addendum. Do not freeze or rename the landmark fork until both are in hand.
+
+>>> Phase 1 addendum APPROVED (cr_ref_early export + descriptive prevalent count only). Phase 2 NOT approved yet (awaiting Yan sign-off). <<<
+
+---
+
+## Entry 4b — Supervisor design directive: mirror mg, minimize novelty (JAMA-style)  (2026-07-18, Claude)
+
+PI-level design call from Haining: **mirror the mg design and covariates; do not invent a new design or
+add methodological novelty. This is a JAMA-oriented clinical paper.** Deviate only where an mg choice is
+clinically or statistically indefensible (说不通) for albumin. This supersedes/relaxes parts of Entries 1–4:
+
+1. **Covariates = mg's set.** Port mg's `02_psm.R` PS list, swapping only the exposure-specific pieces:
+   `mg_cat` → `alb_cat` (3-level, cut 3.5, strict pre-index) and keep `hemoglobin` as albumin's key
+   confounder (hemodilution pathway). **Do NOT adopt Yan's expanded PS-1 (~27 var) / PS-2 (~33 var,
+   fluid/vaso/MAP) as the primary model.** Yan's cardiac-surgery extras are an **optional pre-specified
+   sensitivity**, added only if omitting a specific covariate is indefensible. Follow mg on downstream
+   exclusions (reassess `calcium` for albumin, since albumin binds calcium; flag if kept).
+2. **eGFR stratification is NOT mandatory and NOT prejudged as the headline.** Run and compare:
+   (a) **pooled main effect** — eGFR in the PS, no stratification (current `02_psm.R` behavior);
+   (b) **eGFR-stratified** — eGFR + ckd removed from PS, matched within strata (mg-style);
+   (c) optionally **other stratifications** (baseline albumin, age, surgery type) as exploratory HTE.
+   Let the data decide. If albumin's **main effect** is robust across MIMIC + eICU and clinically clean
+   (ALBICS-consistent harm), that main effect can be the paper — we are **not** forced to pivot to a
+   modifier the way mg was, because mg pivoted only because its main effect was *fragile*. Report
+   honestly whichever is robust.
+3. **Control-covariate timing = mg behavior.** mg uses the same static per-patient `extract_labs`; the
+   index-time re-extraction raised in §2.1(b) is a refinement *beyond* mg and is **NOT required** for the
+   primary. Mirror mg; note it as a limitation; make it an optional sensitivity only if a reviewer presses.
+   (This walks back the §2.1(b) "must-repair.")
+4. **Keep (these ARE mg, so keeping them = mirroring mg):** risk-set yet-untreated, T0 = first albumin;
+   two-reference baseline (Entry 4); **missing-post-Cr = non-event** (reconcile `02_psm.R` to `03_hte.R`);
+   MICE m=20; 1:1 with replacement, caliper 0.2, HC1; `set.seed(2026)`; trigger lab coarse-categorized (`alb_cat`).
+5. **RRT-in-outcome:** mg keeps AKI as SCr-only (RRT descriptive). Yan's albumin protocol primary is
+   "stage 2–3 AKI **or** new RRT." Default to mg (SCr-only) with an RRT-inclusive variant; resolve with Yan at the freeze.
+
+**Net effect on Phase 3:** it is **not a big repair** — port mg's `02_psm.R`/`03_hte.R` behavior
+(non-event coding + two-reference baseline + a stratified variant), run pooled + eGFR-stratified
+(+ optional other), keep mg's covariates. No index-time re-extraction, no new estimator, no bespoke design.
+
+Docs aligned this session: `PLAN.md` §2.1/§3.5/§3.6/§4; `codex.md` design-in-force + Phase 3.
+
+>>> Directive recorded. Entry 4 Phase 1 addendum instruction is unchanged. Phase 2 still gated on Yan sign-off. <<<
+
+---
+
+## Entry 4c — Supervisor: proceed methodology-first; Yan sign-off NOT required  (2026-07-18, Claude)
+
+PI decision (Haining): **run the main experiment now; do not wait for Dr. Yan.** The clinician is an
+assisting role. This **removes the Yan sign-off as a gate** for Phase 2/3 (it was noted as blocking in
+Entries 2/4/4b). Phase 2 freeze proceeds on supervisor authority under the mirror-mg design (Entry 4b).
+
+Items previously deferred "to Yan at the freeze" now take their **mg default**, revisitable if Yan later objects:
+- `alb_cat` cut = **3.5** (mg-style coarse), strict pre-index.
+- **RRT-in-outcome:** primary = mg **SCr-only KDIGO** (≥1/≥2/≥3 at 48h/7d); **also** report "stage ≥2 AKI **or** new RRT" as a labeled **secondary** (the clinically relevant albumin endpoint) so we cover it without needing Yan.
+- Covariates = **mg set** (Entry 4b); Yan's extras remain an optional sensitivity.
+
+**Unlocks Phase 2 (freeze) → Phase 3 (main experiment: pooled + eGFR-stratified, MIMIC + eICU).**
+Freeze `STUDY_DESIGN.md` and commit it **before** the production run (anti estimator-shopping). Landmark,
+sens_a/b, PS-2, LLM (Phase 6), and IUH (Phase 7) remain deferred to their later gates — main experiment only.
+
+>>> Phase 2 + Phase 3 (main experiment) APPROVED. Freeze before run. Stop at the Phase 3 results gate. <<<

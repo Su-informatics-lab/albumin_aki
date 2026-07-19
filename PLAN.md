@@ -89,7 +89,9 @@ supervisor-verified against `02_psm.R` and are accepted. They reshape Phase 3 (s
 | f | **`peri_admission_alb` `[-48,+6]` from ICU0 can be post-infusion**; a static `alb_cat` would be contaminated. | Derive `alb_cat` strictly pre-index-T0 in Phase 3; Phase 1 only preserves timestamped inputs + audits coverage. |
 
 Consequence: the "restore `02_psm.R` as primary" row in §2 is only partly right — `02_psm.R` is the
-right *skeleton* but needs the (a)–(f) repairs before its first trusted run.
+right *skeleton* but needs the (c)–(f) fixes before its first trusted run. **Superseded by Entry 4b:**
+(a) eGFR stratification is now a *variant to run alongside the pooled analysis*, not a mandatory removal;
+(b) index-time control-covariate re-extraction is *not required* (mg behavior stands, optional sensitivity only).
 
 ---
 
@@ -122,19 +124,24 @@ intraoperative/post-CPB values contaminate baseline (failure-modes #8). Record f
 CONSORT. Note honestly: in MIMIC/eICU, "preop" labs are in practice the first *postoperative* ICU
 values — state this as a limitation (`yan_protocol_gap_analysis.md` §3 caveat).
 
-### 3.5 Propensity-score covariates (SWAP the trigger lab + downstream set)
-- **PS-1 (primary; MIMIC + eICU), ~27 vars:** age, sex, BMI; surgery type (CABG, valve, combined, aortic); comorbidities (HF, HTN, DM, CKD, COPD, PVD, stroke, liver); eGFR *(removed from PS when used as stratifier — see 3.6)*; early labs/vitals (hemoglobin, calcium, lactate + `lactate_missing`, heart rate); `vent_at_t0`; extended labs (platelet, INR, BUN, bicarbonate, sodium); and **`alb_cat`** (the trigger lab, coarse-categorized).
-- **Trigger lab handling (FIXED rule):** peri-admission serum albumin enters as `alb_cat` = normal / low / **missing** (the missing level is dominant given ~26% MIMIC coverage — this is a feature, not a bug: it adjusts for indication where measured and cleanly absorbs the unmeasured majority). **Never continuous, never in the PS as a raw value.** Continuous albumin is the `sens_a` over-adjustment check only.
-- **Downstream exclusions:** anything realized after T0 (post-24h variables, LLM complications, calcium if judged albumin-affected). Comorbidities strictly **pre-ICU**, not merely pre-T0.
-- **PS-2 (MIMIC-only sensitivity), ~33 vars:** PS-1 + `vaso_at_t0`, `MAP_before_t0`, crystalloid/urine/RBC/diuretic before T0. **eICU gets none of these** — hospital-level informative missingness (vaso 23%, MAP 53%) must not enter the PS.
+### 3.5 Propensity-score covariates (mirror mg; swap the trigger lab)
+Per Entry 4b: **use mg's covariate set**; do not build a bespoke expanded model.
+- **Primary PS = mg's set, adapted:** age, sex, BMI; surgery type (CABG, valve, combined); pre-ICU comorbidities (HF, HTN, DM, COPD, PVD, stroke, liver); `last_lactate` + `last_lactate_missing`; `last_heartrate`; the trigger lab **`alb_cat`** (mg's `mg_cat` analogue); and **`hemoglobin`** as albumin's key confounder (hemodilution pathway). Whether `egfr`/`ckd` sit in the PS depends on the variant (§3.6): **in** for the pooled analysis, **removed** for the eGFR-stratified one.
+- **Trigger lab handling (FIXED rule):** `alb_cat` = normal / low / **missing** (missing dominant given ~26% MIMIC coverage — a feature: adjusts for indication where measured, absorbs the unmeasured majority). **Never continuous, never raw in the PS.** Continuous albumin is the `sens_a` over-adjustment check only.
+- **Downstream exclusions (follow mg):** anything realized after T0; reassess `calcium` (albumin binds calcium — likely downstream; mg dropped calcium). Comorbidities strictly **pre-ICU**.
+- **Yan's cardiac-surgery extras = OPTIONAL pre-specified sensitivity, not primary:** `surg_aortic`, `vent_at_t0`, extended labs (platelet/INR/BUN/bicarbonate/sodium), and the MIMIC-only fluid/vaso/MAP set. Add only if omitting a specific covariate is indefensible (说不通). **eICU never gets vaso/MAP/fluid** (hospital-level informative missingness: vaso 23%, MAP 53%).
 - **Not available (Limitation):** all intraoperative variables (CPB time, cross-clamp, DHCA, OR fluids/transfusion), true preop labs, structured LVEF.
 
-### 3.6 Effect modifier (SWAP → the same renal axis as mg_aki)
-**eGFR strata** (renal outcome ⇒ renal-reserve modifier). Stratify: run a separate PSM within each
-eGFR stratum and **remove eGFR (and redundant CKD) from the PS**. Consolidate to as few strata as the
-data supports (mg_aki: G1 ≥90 / G2 60–89 / G3+ <60). The **interaction is the headline**; peri-admission
-albumin strata (Zhang bins) are a **secondary** modifier, run in the available-albumin subset with
-transparent coverage reporting (not primary — coverage too low to lead with).
+### 3.6 Analyses to run (pooled + stratified; don't prejudge the headline)
+Per Entry 4b, run and compare — minimal novelty; let the data decide the story:
+- **(a) Pooled main effect** — `egfr` in the PS, no stratification (the current `02_psm.R` behavior).
+- **(b) eGFR-stratified** (mg-style) — `egfr` + redundant `ckd` removed from the PS, matched within eGFR strata; consolidate to as few as the data supports (mg_aki: G1 ≥90 / G2 60–89 / G3+ <60).
+- **(c) Other stratifications, exploratory** — baseline albumin (Zhang bins, available-albumin subset with transparent coverage), age, surgery type.
+
+If albumin's **main effect** is robust across MIMIC + eICU and clinically clean (ALBICS-consistent harm),
+it can be the paper — unlike mg, we are **not** forced to pivot to a modifier (mg pivoted only because its
+main effect was fragile). If instead the effect holds only within an eGFR stratum, that becomes the story.
+Report whichever is robust; do not manufacture a modifier.
 
 ### 3.7 Outcomes (SWAP the operationalization; keep the rules)
 - **Primary:** incident CSA-AKI by KDIGO creatinine criteria — absolute (ΔCr ≥ 0.3 within 48h) and relative (ratio ≥ 1.5 within 7d); cumulative stage indicators (≥1, ≥2, ≥3) as independent ≥ tests. Urine-output criterion not used; RRT kept descriptive (documented limitation), mirroring mg_aki.
@@ -174,8 +181,8 @@ authorizes the next phase. Every gate here corresponds to a mistake that cost re
 - **Deliverable:** frozen `STUDY_DESIGN.md` (versioned, dated); `JOURNAL.md` freeze entry listing every reversed/dropped decision.
 
 ### Phase 3 — PSM + DiD (primary estimator)
-- **Repair first (before any run):** apply the §2.1 fixes to `02_psm.R` — eGFR-stratified matching with `egfr`+`ckd` removed from the PS; control covariates extracted at the treated partner's index T0; the canonical baseline; non-event coding for missing post-T0 outcomes (reconciled with `03_hte.R`); `alb_cat` at index T0. Add tiny static-fixture tests asserting each behavior. Only then run.
-- **Do:** `Rscript 02_psm.R <db>` for mimic + eicu, eGFR-stratified, MICE m=20 averaged, 1:1 with replacement, caliper 0.2, HC1; doubly-robust adjustment for any post-match SMD > 0.1.
+- **Mirror mg first (before any run), minimal changes (Entry 4b):** bring `02_psm.R` to mg's behavior — **non-event coding** for missing post-T0 outcomes (reconcile with `03_hte.R`); the **two-reference baseline** (Entry 4); `alb_cat` (mg's `mg_cat` analogue) at index T0; mg's covariate set (§3.5). Add the **eGFR-stratified variant** (egfr+ckd removed, match within strata) *alongside* the existing pooled version. **Not required:** index-time control-covariate re-extraction (a refinement beyond mg — optional sensitivity only). Add small static-fixture tests for the non-event coding + baseline, then run.
+- **Do:** `Rscript 02_psm.R <db>` for mimic + eicu — run **both** the pooled and eGFR-stratified variants; MICE m=20 averaged, 1:1 with replacement, caliper 0.2, HC1; doubly-robust adjustment for any post-match SMD > 0.1.
 - **Gate:** logistic PS only; match rate ~95%+ per stratum (if it collapses, the control pool is the constraint — do **not** reach for a flexible PS, failure-modes #5); balance table produced; SMD reported only for PS covariates.
 - **Deliverable:** `did_riskset_*`, `did_binary_*`, `did_pairs_primary_yet_untreated_*` (patient-level → HPC only), `psm_balance_*` (aggregate committed).
 

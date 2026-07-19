@@ -42,9 +42,11 @@ Log the conflict.
 
 ## 1. The design in force (the short version — `PLAN.md` is authoritative)
 
-**Primary = pure engine.** Yet-untreated risk-set matching; T0 = **first albumin administration**
-(not a lab, not ICU admission); eGFR-stratified; the **albumin × eGFR interaction is the headline**,
-not the main effect.
+**Primary = pure engine, mirroring mg (no methodological novelty — JAMA-style; see `JOURNAL.md` Entry 4b).**
+Yet-untreated risk-set matching; T0 = **first albumin administration** (not a lab, not ICU admission).
+Run **both** a pooled main-effect analysis (eGFR in the PS) **and** an eGFR-stratified variant (mg-style,
+eGFR removed), plus optional other stratifications; report whichever is robust — do not prejudge or
+manufacture a modifier.
 
 **Fixed elements you must not re-derive:**
 - Control pool = yet-untreated risk set at each treated patient's T0 (never never-treated).
@@ -173,10 +175,12 @@ ssh tempest 'cd ~/albumin_aki && git pull && module purge && module load Python/
 - Confirm Yan sign-off is recorded. **STOP.**
 
 ### Phase 3 — PSM + DiD (Tempest)
-**Repair `02_psm.R` before the first run** (per `JOURNAL.md` Entry 1/2 + `PLAN.md §2.1`): eGFR-stratified
-matching with `egfr`+`ckd` removed from the PS; control covariates extracted at the treated partner's
-index T0 (not the whole stay); the canonical baseline; non-event coding for missing post-T0 outcomes
-(reconcile with `03_hte.R`); `alb_cat` at index T0. Add tiny static-fixture tests asserting each, then run.
+**Mirror mg (per `JOURNAL.md` Entry 4b) — minimal changes, no novelty.** Bring `02_psm.R` to mg's
+behavior: **non-event coding** for missing post-T0 outcomes (reconcile with `03_hte.R`); the
+**two-reference baseline** (Entry 4); `alb_cat` at index T0; mg's covariate set. Add the **eGFR-stratified
+variant** (egfr+ckd removed, match within strata) *alongside* the existing pooled version, and run both.
+**Do NOT** implement index-time control-covariate re-extraction as primary (a refinement beyond mg —
+optional sensitivity only). Add small static-fixture tests for the non-event coding + baseline, then run.
 
 This repo has only `run.sh`; create `run_psm.sh` first, adapted from `mg/run_psm.sh` (keep
 `#SBATCH --export=NONE`, confirm `--account`/`--partition` with `sinfo`/`sacctmgr`). **Scope the Phase 3
