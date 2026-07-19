@@ -532,3 +532,166 @@ Docs updated this session: `PLAN.md` §2 (verified drift rows) + §4 Phase 3 (re
 PHASE1.md draft). Stop at the Phase 1 gate and post Entry 3.
 
 >>> APPROVED: Phase 1. Proceed. <<<
+
+---
+
+## Entry 3 — Phase 1 ETL/probe gate  (2026-07-18, Codex)
+
+### Gate status
+
+**Phase 1 execution is complete and stopped for supervisor review. No PSM, HTE, landmark, or
+outcome-analysis script was run.** All patient-level artifacts remain on Tempest and gitignored.
+The two committed result files are aggregate-only, long-form CONSORT tables.
+
+One design boundary is made explicit rather than hidden: treated patients have an own-T0 canonical
+anchor (`icu_last_pre_albumin`, with `admit_window_fallback`); never-treated patients cannot have a
+final last-pre-exposure anchor until a treated partner supplies index T0 in Phase 3, so their Phase 1
+reference is honestly labeled `icu_first_reference`, never “preoperative.” Timestamped negative and
+positive Cr values are retained for the Phase 3 pair-indexed replacement.
+
+### P1.1 — Preflight and repository state
+
+- Supervisor documents committed and pushed first: `ffde389` (`docs: approve phase1 ETL
+  conditions`).
+- Local `main`; backup branch/tag `pre-engine-realign-2026-07-18` present.
+- Tempest tracked tree was clean and strictly fast-forwardable. Preserved exceptions:
+  - legacy untracked `probe.py` in `~/albumin_aki` (aggregate-only July 4 feasibility probe);
+  - pre-existing allow-listed aggregate result files.
+- Tempest was fast-forwarded with `git pull --ff-only`. Non-interactive shells required
+  `source /etc/profile.d/modules.sh` before the supervisor-specified module command; the initial
+  command failed before Python started and mutated no data.
+- No patient-level file was copied off Tempest.
+
+### P1.2 — Hygiene
+
+- `.gitignore` is default-deny under `results/*`.
+- Only named aggregate stems are allow-listed. `did_binary_pairs_*`, `matched_pairs_*`,
+  `llm_qc_spotcheck.txt`, cohorts/checkpoints/LLM endpoints, streams, extended labs, and Cr variants
+  remain ignored.
+- `.Rhistory` is ignored. `codex_kickoff_prompt.md` remains untracked.
+- Pre-commit `autoflake`, `isort`, `black`, whitespace, merge-conflict, YAML/TOML, and debug checks
+  passed.
+
+### P1.3/P1.4 — ETL contract and focused probes
+
+Implementation commits:
+
+- `00b9383` — `Implement Phase 1 ETL audit contract`
+- `a3bf5be` — `Fix qualifying albumin coverage probe`
+- `8fb71f3` — `Clarify CONSORT step deltas`
+
+Implemented:
+
+- `ALB_LOW_CUT = 3.5`; no static `alb_cat` column.
+- `baseline_cr`, `baseline_cr_offset_h`, and `baseline_cr_source`; eGFR is recomputed from
+  `baseline_cr`. `first_cr` is retained only as an identical compatibility alias pending the Phase 3
+  repair.
+- Treated baseline = last Cr strictly in `[ICU0, own first-albumin T0)`, with the documented
+  admit-window fallback. Post-CPB ICU values are labeled `icu_last_pre_albumin`, never
+  “preoperative.”
+- Never-treated Phase 1 reference = first qualifying ICU Cr, labeled `icu_first_reference`; Phase 3
+  must replace this with last Cr before the treated partner's index T0.
+- Negative-offset Cr and albumin labs are retained in the timestamped exports needed by Phase 3.
+- Per-database long-form CONSORT with ordered steps, signed change, and exclusion count.
+
+Focused assertion outputs:
+
+**Exposure ascertainment**
+
+| Database | Final treated | Raw accepted rows | T0 median (IQR), h | `<=24 h` | `>24 h` | Result |
+|---|---:|---:|---:|---:|---:|---|
+| MIMIC | 5,771 | 17,944 | 10.44 (7.05–16.84) | 4,934 | 837 | PASS |
+| eICU | 2,298 | 7,072 | 6.57 (1.25–25.55) | 1,689 | 609 | PASS |
+
+MIMIC accepted item counts were 3,611 for item 220862 (25%) and 14,333 for item 220864
+(5%). eICU had 645 patients represented in both medication and intakeOutput accepted sources.
+Every final treated T0 mapped exactly to the first accepted raw administration row; no negative T0.
+
+**Baseline anchor**
+
+| Database | Control reference | Treated ICU last-pre-T0 | Treated admit fallback | Baseline Cr median (IQR) | Result |
+|---|---:|---:|---:|---:|---|
+| MIMIC | 6,889 | 5,769 | 2 | 0.90 (0.70–1.10) | PASS |
+| eICU | 16,779 | 1,699 | 599 | 0.96 (0.76–1.29) | PASS |
+
+All values/timestamps traced to `did_cr_all_*`; all treated timestamps were strictly before own T0;
+all values were `[0.1, 4.0)`; eGFR exactly recomputed from the emitted value. The fallback count is
+lower than the eligibility-rescue count (MIMIC 3, eICU 610) because the final cohort excludes
+baseline Cr `>=4`.
+
+**Strict pre-own-T0 albumin coverage (QC only, not a PS covariate)**
+
+| Database | Low `<3.5` | Normal `>=3.5` | Missing | Old peri-window post-infusion | Result |
+|---|---:|---:|---:|---:|---|
+| MIMIC | 621 | 2,118 | 3,032 | 5 | PASS |
+| eICU | 948 | 592 | 758 | 45 | PASS |
+
+The first MIMIC coverage run stopped on its assertion because one raw albumin row had a missing
+numeric value. Aggregate diagnosis showed 5,771 treated, 2,740 pre-T0 patient groups, exactly one
+missing value, and two duplicate patient-time rows. The probe—not ETL—was corrected to apply the
+same qualifying albumin range (`0.5–8.0 g/dL`) and to select one intact latest row. Both database
+assertions then passed. No cohort count was auto-patched.
+
+`probe_nopost_cr` was not created or run; it remains at the Phase 3 matched-pair gate.
+
+### P1.5 — Explicit per-database builds
+
+**MIMIC CONSORT**
+
+| Step | n | Change | Excluded |
+|---|---:|---:|---:|
+| All ICU stays | 94,458 | — | — |
+| Adult first cardiac-surgery stay | 13,404 | -81,054 | 81,054 |
+| After ESKD exclusion | 12,975 | -429 | 429 |
+| Any accepted IV albumin | 5,853 | — | — |
+| ICU Cr strictly before own T0 | 5,790 | -63 | 63 |
+| After admit-window fallback | 5,793 | +3 | 0 |
+| Final treated, baseline Cr `<4` | 5,771 | -22 | 22 |
+| Never accepted IV albumin | 7,122 | — | — |
+| At least two post-ICU Cr | 6,956 | -166 | 166 |
+| Final control reference Cr `<4` | 6,889 | -67 | 67 |
+
+**eICU CONSORT**
+
+| Step | n | Change | Excluded |
+|---|---:|---:|---:|
+| All ICU stays | 200,859 | — | — |
+| Adult first cardiac-surgery stay | 26,725 | -174,134 | 174,134 |
+| After ESKD exclusion | 25,822 | -903 | 903 |
+| Any accepted IV albumin | 3,991 | — | — |
+| ICU Cr strictly before own T0 | 1,775 | -2,216 | 2,216 |
+| After admit-window fallback | 2,385 | +610 | 0 |
+| Final treated, baseline Cr `<4` | 2,298 | -87 | 87 |
+| Never accepted IV albumin | 22,044 | — | — |
+| At least two post-ICU Cr | 17,149 | -4,895 | 4,895 |
+| Final control reference Cr `<4` | 16,779 | -370 | 370 |
+
+Compared with the prior wide CONSORT, upstream counts were unchanged. Canonical-anchor screening
+changed MIMIC final treated by -7 (0.12%), eICU final treated by -13 (0.56%), and eICU final controls
+by +1; these are expected consequences of screening the emitted reference value rather than the old
+earliest-ICU construct, not surprising cohort shifts.
+
+`01b_covariates.py mimic`, `01b_covariates.py eicu`, MIMIC-only `01c_endpoints.py`, and
+`qc_probe.py` completed. Updated denominators were 12,660 MIMIC and 19,077 eICU. All row-level
+streams and endpoint inputs stayed on Tempest.
+
+### P1.6 — Gate checklist
+
+- [✅] Raw first-albumin T0 mapping and timing assertions pass in both databases.
+- [✅] Treated own-T0 baseline value/tier/timestamp and eGFR assertions pass.
+- [✅] Timestamped Cr/albumin retained; no static `alb_cat`.
+- [✅] Strict pre-own-T0 albumin coverage machine-emitted; contamination of the old window counted.
+- [✅] Per-database aggregate long-form CONSORT emitted and inspected.
+- [✅] Explicit per-database ETL/covariate commands and MIMIC-only endpoints completed.
+- [✅] `qc_probe.py` completed; focused probes, not descriptive QC, enforce the gate.
+- [✅] No PSM/HTE/landmark run; no patient-level artifact staged or copied.
+- [⏳] Pair-indexed control baseline and `probe_nopost_cr` remain Phase 3 by supervisor lock.
+- [⚠️] **SUPERVISOR CLARIFICATION REQUIRED BEFORE CLAIMING A PREVALENT-AKI-AT-T0 EXCLUSION:**
+  a last-pre-T0 Cr used as its own KDIGO reference makes that screen degenerate. Phase 1 applies the
+  frozen severe-reference-Cr exclusion (`baseline_cr >=4`) but does not invent an unapproved earlier
+  reference or silently call postoperative Cr “preoperative.” Please specify whether prevalent AKI
+  should compare the last-pre-T0 value with (a) an admit-window/preoperative Cr when available,
+  (b) an earlier rolling minimum (and exact time window), or (c) be deferred to the Phase 2 freeze /
+  Phase 3 pair-indexed implementation.
+
+**STOP. Awaiting supervisor review of Entry 3; do not begin Phase 2.**

@@ -1,0 +1,11 @@
+db,step_order,branch,step,n,change_from_previous,excluded_from_previous
+MIMIC,1,overall,all_icu_stays,94458,,
+MIMIC,2,overall,adult_first_cardiac_surgery_stay,13404,-81054.0,81054.0
+MIMIC,3,overall,after_eskd_exclusion,12975,-429.0,429.0
+MIMIC,4,treated,any_accepted_iv_albumin,5853,,
+MIMIC,5,treated,icu_cr_strictly_before_own_t0,5790,-63.0,63.0
+MIMIC,6,treated,baseline_after_admit_window_fallback,5793,3.0,0.0
+MIMIC,7,treated,final_after_baseline_cr_lt_4,5771,-22.0,22.0
+MIMIC,8,control,never_accepted_iv_albumin,7122,,
+MIMIC,9,control,at_least_two_post_icu_cr,6956,-166.0,166.0
+MIMIC,10,control,final_after_reference_cr_lt_4,6889,-67.0,67.0
