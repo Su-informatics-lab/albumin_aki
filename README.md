@@ -11,10 +11,16 @@ Architecture adapted from [mg_aki](https://github.com/Su-informatics-lab/mg_aki)
 
 ```bash
 python 01_etl.py        # cohort construction
-Rscript 02_psm.R mimic  # risk-set PSM + DiD
-Rscript 02_psm.R eicu
-Rscript 03_hte.R mimic   # albumin-strata HTE
+Rscript 02_psm.R mimic pooled  # pooled risk-set PSM
+Rscript 02_psm.R mimic egfr    # match within G1/G2/G3+
+Rscript 02_psm.R eicu pooled
+Rscript 02_psm.R eicu egfr
+Rscript 03_hte.R mimic   # formal eGFR interaction + subgroups
 Rscript 03_hte.R eicu
+Rscript probe_nopost_cr.R mimic pooled
+Rscript probe_nopost_cr.R mimic egfr
+Rscript probe_nopost_cr.R eicu pooled
+Rscript probe_nopost_cr.R eicu egfr
 python 04_figures.py     # publication figures
 ```
 

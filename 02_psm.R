@@ -1,383 +1,348 @@
 #!/usr/bin/env Rscript
-# ============================================================================
-# 02_psm.R — Risk-Set PSM for Albumin -> CSA-AKI
-# Adapted from mg_aki/02_psm.R v5.1
-#
-# Specs:
-#   PRIMARY:  20 var, LAST labs, no albumin/K (best balance)
-#   SENS_A:   22 var, LAST labs, +albumin/K  (over-adjustment check)
-#   SENS_B:   20 var, FIRST labs             (lab-timing sensitivity)
-#
-# Pool:     yet-untreated only (sequential trial estimand)
-# Methods:  PSM | PSM+DR (adjust SMD>0.1)
-# Horizons: 6-48h
-# MICE:     m=20 averaged
-# Match:    1:1 with replacement, caliper 0.2 SD, HC1 SE
-#
-# Usage: Rscript 02_psm.R mimic
-#        Rscript 02_psm.R eicu
-# ============================================================================
+# Canonical frozen risk-set PSM for albumin and cardiac-surgery AKI.
+# Usage: Rscript 02_psm.R {mimic|eicu} {pooled|egfr}
 
-suppressPackageStartupMessages({ library(sandwich); library(lmtest); library(mice) })
+suppressPackageStartupMessages({
+  library(sandwich)
+  library(lmtest)
+  library(mice)
+})
 
-RESULTS    <- path.expand("~/albumin_aki/results")
-PRIMARY_H  <- 24
-CR_WINDOW  <- 12
+RESULTS <- path.expand("~/albumin_aki/results")
+M_IMP <- 20
 CALIPER_SD <- 0.2
-M_IMP      <- 20
-TARGETS    <- c(6, 12, 18, 24, 30, 36, 42, 48)
+PRIMARY_H <- 24
+SEED <- 2026
 
-PS_BASE <- c("age","is_female","bmi",
-             "surg_cabg","surg_valve","surg_combined",
-             "heart_failure","hypertension","diabetes","ckd",
-             "copd","pvd","stroke","liver_disease","egfr")
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) != 2 || !(tolower(args[1]) %in% c("mimic", "eicu")) ||
+    !(tolower(args[2]) %in% c("pooled", "egfr"))) {
+  stop("Usage: Rscript 02_psm.R {mimic|eicu} {pooled|egfr}")
+}
+tag <- tolower(args[1])
+db <- toupper(tag)
+variant <- tolower(args[2])
+file_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
+file_arg <- sub("^--file=", "", file_arg[1])
+script_dir <- dirname(normalizePath(file_arg))
+if (!file.exists(file.path(script_dir, "R", "causal_helpers.R"))) {
+  script_dir <- getwd()
+}
+source(file.path(script_dir, "R", "causal_helpers.R"))
 
-# NOTE: hemoglobin replaces mg_value from mg_aki;
-#       peri_admission_alb and potassium excluded from primary (treatment triggers)
-SPECS <- list(
-  primary = list(
-    vars  = c(PS_BASE, "last_hemoglobin","last_calcium","last_lactate","last_lactate_missing","last_heartrate"),
-    label = "20var LAST (no alb/K)"),
-  sens_a  = list(
-    vars  = c(PS_BASE, "last_hemoglobin","last_potassium","last_albumin","last_calcium",
-              "last_lactate","last_lactate_missing","last_heartrate"),
-    label = "22var LAST (+alb/K)"),
-  sens_b  = list(
-    vars  = c(PS_BASE, "first_hemoglobin","first_calcium","first_lactate","first_lactate_missing","first_heartrate"),
-    label = "20var FIRST (no alb/K)")
+PS_BASE <- c(
+  "age", "is_female", "bmi",
+  "surg_cabg", "surg_valve", "surg_combined",
+  "heart_failure", "hypertension", "diabetes", "ckd",
+  "copd", "pvd", "stroke", "liver_disease", "egfr"
 )
+PS_VARS_POOLED <- c(
+  PS_BASE, "last_calcium", "last_lactate", "last_lactate_missing",
+  "last_heartrate", "last_hemoglobin", "alb_cat"
+)
+PS_VARS_EGFR <- setdiff(PS_VARS_POOLED, c("egfr", "ckd"))
+LAB_BASES <- c("albumin", "calcium", "lactate", "heartrate", "hemoglobin")
 
-LAB_BASES <- c("hemoglobin","potassium","albumin","calcium","lactate","heartrate")
-
-# ═══════════════════════════════════════════════════════════════════
-# HELPERS (identical to mg_aki except alb_offset_h replaces mg_offset_h)
-# ═══════════════════════════════════════════════════════════════════
-find_cr <- function(cr_pt, target_h, window = CR_WINDOW) {
-  if (is.null(cr_pt) || nrow(cr_pt) == 0) return(c(NA, NA))
-  cand <- cr_pt[cr_pt$offset_h >= (target_h - window) & cr_pt$offset_h <= (target_h + window), ]
-  if (nrow(cand) == 0) return(c(NA, NA))
-  best <- cand[which.min(abs(cand$offset_h - target_h)), ]
-  c(best$labresult, best$offset_h)
-}
-find_cr_pre <- function(cr_pt, t_h) {
-  if (is.null(cr_pt) || nrow(cr_pt) == 0) return(c(NA, NA))
-  cand <- cr_pt[cr_pt$offset_h >= 0 & cr_pt$offset_h < t_h, ]
-  if (nrow(cand) == 0) return(c(NA, NA))
-  best <- cand[which.max(cand$offset_h), ]
-  c(best$labresult, best$offset_h)
-}
-find_cr_max <- function(cr_pt, t0_h, target_h) {
-  if (is.null(cr_pt) || nrow(cr_pt) == 0) return(c(NA, NA))
-  cand <- cr_pt[cr_pt$offset_h > t0_h & cr_pt$offset_h <= target_h, ]
-  if (nrow(cand) == 0) return(c(NA, NA))
-  best <- cand[which.max(cand$labresult), ]
-  c(best$labresult, best$offset_h)
-}
-safe_coeftest <- function(fit) {
-  ct <- tryCatch(suppressWarnings(coeftest(fit, vcov. = vcovHC(fit, type = "HC1"))),
-                 error = function(e) NULL)
-  if (!is.null(ct) && is.matrix(ct) && "treated" %in% rownames(ct) &&
-      ncol(ct) >= 4 && !any(is.nan(ct["treated", ]))) return(ct)
-  tryCatch(coeftest(fit), error = function(e) NULL)
-}
-
-extract_labs <- function(labs, all_pts, lab_bases, prefix, descending) {
-  for (ln in lab_bases) {
-    sub <- labs[labs$lab_name == ln, ]
-    if (nrow(sub) == 0) next
-    sub$alb_offset_h <- all_pts$alb_offset_h[match(sub$pid, all_pts$pid)]
-    sub <- sub[sub$offset_h >= 0 & (is.na(sub$alb_offset_h) | sub$offset_h < sub$alb_offset_h), ]
-    if (nrow(sub) == 0) next
-    if (descending) s <- sub[order(-sub$offset_h), ] else s <- sub[order(sub$offset_h), ]
-    s <- s[!duplicated(s$pid), ]
-    idx <- match(all_pts$pid, s$pid)
-    col <- paste0(prefix, "_", ln)
-    all_pts[[col]] <- s$value[idx]
+extract_static_last <- function(labs, all_pts) {
+  for (lab in LAB_BASES) {
+    sub <- labs[labs$lab_name == lab & labs$offset_h >= 0, , drop = FALSE]
+    sub$own_t0 <- all_pts$alb_offset_h[match(sub$pid, all_pts$pid)]
+    sub <- sub[is.na(sub$own_t0) | sub$offset_h < sub$own_t0, , drop = FALSE]
+    if (nrow(sub) == 0) {
+      all_pts[[paste0("last_", lab)]] <- NA_real_
+      next
+    }
+    sub <- sub[order(sub$pid, -sub$offset_h, -sub$value), , drop = FALSE]
+    sub <- sub[!duplicated(sub$pid), , drop = FALSE]
+    all_pts[[paste0("last_", lab)]] <- sub$value[
+      match(all_pts$pid, sub$pid)
+    ]
   }
-  lac_col <- paste0(prefix, "_lactate")
-  miss_col <- paste0(prefix, "_lactate_missing")
-  all_pts[[miss_col]] <- as.integer(is.na(all_pts[[lac_col]]))
+  all_pts$last_lactate_missing <- as.integer(is.na(all_pts$last_lactate))
+  all_pts$alb_cat <- factor(
+    ifelse(
+      is.na(all_pts$last_albumin), "missing",
+      ifelse(all_pts$last_albumin < 3.5, "low", "normal")
+    ),
+    levels = c("normal", "low", "missing")
+  )
   all_pts
 }
 
-# ═══════════════════════════════════════════════════════════════════
-# run_spec_pool (identical logic, alb_offset_h replaces mg_offset_h)
-# ═══════════════════════════════════════════════════════════════════
-run_spec_pool <- function(spec_name, spec_obj, pool_name,
-                          all_pts, trt_idx, risk_sets,
-                          cr_list, trt_talb, caliper) {
-  ps_vars <- intersect(spec_obj$vars, names(all_pts))
-  ps_vars <- ps_vars[vapply(ps_vars, function(v) {
-    x <- all_pts[[v]]; !all(is.na(x)) && var(x, na.rm=TRUE) > 1e-10
+usable_ps_vars <- function(dat, vars) {
+  missing <- setdiff(vars, names(dat))
+  if (length(missing)) stop("Missing frozen PS variables: ", paste(missing, collapse = ", "))
+  keep <- vars[vapply(vars, function(v) {
+    x <- dat[[v]]
+    if (is.factor(x) || is.character(x)) length(unique(x[!is.na(x)])) > 1
+    else !all(is.na(x)) && var(x, na.rm = TRUE) > 1e-10
   }, logical(1))]
-  n_trt <- length(trt_idx)
-  sep <- paste(rep("-", 60), collapse = "")
-  cat(sprintf("\n%s\n  %s [%s] | %s | %d covars\n%s\n",
-              sep, toupper(spec_name), spec_obj$label, toupper(pool_name), length(ps_vars), sep))
+  dropped <- setdiff(vars, keep)
+  if (length(dropped)) stop("Frozen PS variables are constant/all missing: ",
+                            paste(dropped, collapse = ", "))
+  keep
+}
 
-  ps_fml <- as.formula(paste("treated ~", paste(ps_vars, collapse = "+")))
-  ps_fit <- suppressWarnings(glm(ps_fml, data = all_pts, family = binomial()))
-  all_pts$ps <- predict(ps_fit, type = "response")
-
-  match_trt <- integer(n_trt); match_ctl <- integer(n_trt); matched <- logical(n_trt)
-  for (k in seq_len(n_trt)) {
-    rs <- risk_sets[[k]]; if (length(rs) == 0) next
-    pd <- abs(all_pts$ps[rs] - all_pts$ps[trt_idx[k]])
-    wc <- which(pd <= caliper); if (length(wc) == 0) next
-    best <- wc[which.min(pd[wc])]
-    match_trt[k] <- trt_idx[k]; match_ctl[k] <- rs[best]; matched[k] <- TRUE
+average_ps <- function(dat, vars) {
+  numeric_vars <- vars[!vapply(dat[vars], function(x) is.factor(x) || is.character(x),
+                               logical(1))]
+  impute_vars <- numeric_vars[vapply(numeric_vars, function(v) any(is.na(dat[[v]])),
+                                     logical(1))]
+  base <- dat[, c("treated", numeric_vars), drop = FALSE]
+  completed <- vector("list", M_IMP)
+  if (length(impute_vars)) {
+    methods <- rep("", ncol(base))
+    names(methods) <- names(base)
+    methods[impute_vars] <- "pmm"
+    set.seed(SEED)
+    imp <- mice(base, m = M_IMP, method = methods, maxit = 10, printFlag = FALSE)
+    for (m in seq_len(M_IMP)) completed[[m]] <- complete(imp, m)
+  } else {
+    for (m in seq_len(M_IMP)) completed[[m]] <- base
   }
-  nm <- sum(matched)
-  cat(sprintf("  Matched: %d/%d (%.1f%%)\n", nm, n_trt, 100*nm/n_trt))
-  if (nm < 50) return(NULL)
-
-  trt_m <- match_trt[matched]; ctl_m <- match_ctl[matched]
-  smds <- sapply(ps_vars, function(v) {
-    x1 <- all_pts[[v]][trt_m]; x0 <- all_pts[[v]][ctl_m]
-    sp <- sqrt((var(x1,na.rm=T)+var(x0,na.rm=T))/2)
-    if (is.na(sp)||sp<1e-10) 0 else abs(mean(x1,na.rm=T)-mean(x0,na.rm=T))/sp
-  })
-  adj_vars <- names(smds[smds > 0.1])
-  cat(sprintf("  Balance: max=%.3f, viol=%d/%d\n", max(smds), sum(smds>0.1), length(ps_vars)))
-
-  results <- list()
-  for (target_h in TARGETS) {
-    dcr_t <- dcr_c <- numeric(nm); valid <- logical(nm); idx <- 0
-    for (kk in which(matched)) {
-      idx <- idx+1
-      tp <- as.character(all_pts$pid[match_trt[kk]])
-      cp <- as.character(all_pts$pid[match_ctl[kk]])
-      talb <- trt_talb[kk]
-      # Censor if control received albumin before outcome window
-      calb <- all_pts$alb_offset_h[match_ctl[kk]]
-      if (!is.na(calb) && calb < talb+target_h) { valid[idx]<-FALSE; next }
-      pt <- find_cr_pre(cr_list[[tp]], talb); pc <- find_cr_pre(cr_list[[cp]], talb)
-      qt <- find_cr_max(cr_list[[tp]], talb, talb+target_h); qc <- find_cr_max(cr_list[[cp]], talb, talb+target_h)
-      if (any(is.na(c(pt[1],pc[1],qt[1],qc[1])))) { valid[idx]<-FALSE; next }
-      dcr_t[idx] <- qt[1]-pt[1]; dcr_c[idx] <- qc[1]-pc[1]; valid[idx] <- TRUE
-    }
-    nv <- sum(valid)
-    if (nv < 30) {
-      for (mt in c("psm","psm_dr"))
-        results[[length(results)+1]] <- data.frame(spec=spec_name, pool=pool_name,
-          target_h=target_h, method=mt, n=nv, did=NA, se=NA, p=NA, ci_lo=NA, ci_hi=NA,
-          max_smd=max(smds), n_viol=sum(smds>0.1))
-      next
-    }
-    pdf <- data.frame(delta_cr=c(dcr_t[valid],dcr_c[valid]), treated=rep(c(1,0),each=nv))
-    tr <- match_trt[matched][valid]; cr_idx <- match_ctl[matched][valid]
-    for (av in adj_vars) if (av %in% names(all_pts))
-      pdf[[av]] <- c(all_pts[[av]][tr], all_pts[[av]][cr_idx])
-
-    fp <- lm(delta_cr ~ treated, data=pdf); cp_ct <- safe_coeftest(fp)
-    results[[length(results)+1]] <- data.frame(spec=spec_name, pool=pool_name,
-      target_h=target_h, method="psm", n=nv,
-      did=cp_ct["treated",1], se=cp_ct["treated",2], p=cp_ct["treated",4],
-      ci_lo=cp_ct["treated",1]-1.96*cp_ct["treated",2], ci_hi=cp_ct["treated",1]+1.96*cp_ct["treated",2],
-      max_smd=max(smds), n_viol=sum(smds>0.1))
-
-    ua <- intersect(adj_vars, names(pdf))
-    ua <- ua[vapply(ua, function(v) var(pdf[[v]],na.rm=T)>1e-10, logical(1))]
-    fd <- if (length(ua)>0) tryCatch(lm(as.formula(paste("delta_cr~treated+",paste(ua,collapse="+"))),
-           data=pdf), error=function(e) fp) else fp
-    cd <- safe_coeftest(fd)
-    results[[length(results)+1]] <- data.frame(spec=spec_name, pool=pool_name,
-      target_h=target_h, method="psm_dr", n=nv,
-      did=cd["treated",1], se=cd["treated",2], p=cd["treated",4],
-      ci_lo=cd["treated",1]-1.96*cd["treated",2], ci_hi=cd["treated",1]+1.96*cd["treated",2],
-      max_smd=max(smds), n_viol=sum(smds>0.1))
+  preds <- matrix(NA_real_, nrow(dat), M_IMP)
+  for (m in seq_len(M_IMP)) {
+    model_dat <- dat[, vars, drop = FALSE]
+    model_dat[numeric_vars] <- completed[[m]][numeric_vars]
+    model_dat$treated <- dat$treated
+    fit <- suppressWarnings(glm(
+      reformulate(vars, response = "treated"),
+      data = model_dat, family = binomial()
+    ))
+    preds[, m] <- predict(fit, newdata = model_dat, type = "response")
+    if (m == 1L) dat[numeric_vars] <- model_dat[numeric_vars]
   }
-  res <- do.call(rbind, results)
+  list(ps = rowMeans(preds), completed = dat)
+}
 
-  cat(sprintf("  -- PSM_DR [%s | %s] --\n", spec_name, pool_name))
-  sub <- res[res$method=="psm_dr",]
-  for (i in seq_len(nrow(sub))) { r<-sub[i,]
-    if (is.na(r$did)) next
-    sig<-if(!is.na(r$p)&&r$p<0.05)" *" else "  "
-    cat(sprintf("  %3dh  %+.4f  P=%.4f%s  n=%d\n", r$target_h, r$did, r$p, sig, r$n))
+smd_one <- function(x1, x0) {
+  if (is.factor(x1) || is.character(x1)) {
+    levels_all <- union(unique(as.character(x1)), unique(as.character(x0)))
+    vals <- vapply(levels_all, function(level) {
+      p1 <- mean(as.character(x1) == level)
+      p0 <- mean(as.character(x0) == level)
+      sp <- sqrt((p1 * (1 - p1) + p0 * (1 - p0)) / 2)
+      if (is.na(sp) || sp < 1e-10) 0 else abs(p1 - p0) / sp
+    }, numeric(1))
+    return(max(vals))
   }
-  list(results=res, pairs=data.frame(trt_pid=all_pts$pid[trt_m],ctl_pid=all_pts$pid[ctl_m],
-       t_alb=trt_talb[matched]), n_matched=nm, max_smd=max(smds), n_viol=sum(smds>0.1))
+  sp <- sqrt((var(x1, na.rm = TRUE) + var(x0, na.rm = TRUE)) / 2)
+  if (is.na(sp) || sp < 1e-10) 0 else
+    abs(mean(x1, na.rm = TRUE) - mean(x0, na.rm = TRUE)) / sp
 }
 
-# ═══════════════════════════════════════════════════════════════════
-# MAIN
-# ═══════════════════════════════════════════════════════════════════
-args <- commandArgs(trailingOnly=TRUE)
-if (length(args)<1) { cat("Usage: Rscript 02_psm.R <db>\n"); quit(status=1) }
-db <- toupper(args[1]); tag <- tolower(db)
-
-SEP <- paste(rep("=",70),collapse="")
-cat(sprintf("\n%s\n02_psm.R -- %s (Albumin -> CSA-AKI)\n  PRIMARY: 20var LAST (no alb/K)\n  SENS_A:  22var LAST (+alb/K)\n  SENS_B:  20var FIRST\n%s\n",SEP,db,SEP))
-
-all_pts <- read.csv(file.path(RESULTS,sprintf("did_all_%s.csv",tag)),stringsAsFactors=FALSE)
-cr_all <- read.csv(file.path(RESULTS,sprintf("did_cr_all_%s.csv",tag)),stringsAsFactors=FALSE)
-cr_id <- if("patientunitstayid"%in%names(cr_all)) "patientunitstayid" else "stay_id"
-cr_all$pid <- cr_all[[cr_id]]
-if(!"offset_h"%in%names(cr_all)) cr_all$offset_h <- cr_all$labresultoffset/60
-cr_all <- cr_all[order(cr_all$pid, cr_all$offset_h),]
-
-cat("  Loading labs...\n")
-labs_raw <- read.csv(file.path(RESULTS,sprintf("did_labs_all_%s.csv",tag)),stringsAsFactors=FALSE)
-pcl <- if("patientunitstayid"%in%names(labs_raw)) "patientunitstayid" else "stay_id"
-if(pcl%in%names(labs_raw)) labs_raw$pid <- labs_raw[[pcl]]
-le <- labs_raw[labs_raw$lab_name %in% c("hemoglobin","potassium","albumin","calcium","lactate"),]
-lh <- labs_raw[labs_raw$lab_name=="heartrate",]
-if(nrow(lh)>500000) {
-  lh$hb<-floor(lh$offset_h); lh<-lh[order(lh$pid,lh$offset_h),]
-  lh<-lh[!duplicated(paste(lh$pid,lh$hb)),]; lh$hb<-NULL
-}
-labs<-rbind(le,lh); rm(labs_raw,le,lh); gc()
-
-N<-nrow(all_pts)
-cat(sprintf("  Patients: %d (%d trt, %d ctl)\n\n",N,sum(all_pts$treated==1),sum(all_pts$treated==0)))
-
-cat("  LAST labs (closest to T0)...\n")
-all_pts <- extract_labs(labs, all_pts, LAB_BASES, "last", descending=TRUE)
-for(ln in LAB_BASES) { col<-paste0("last_",ln); nf<-sum(!is.na(all_pts[[col]]))
-  cat(sprintf("    %s: %d (%.0f%%)\n",col,nf,100*nf/N)) }
-
-cat("  FIRST labs (earliest postop)...\n")
-all_pts <- extract_labs(labs, all_pts, LAB_BASES, "first", descending=FALSE)
-
-# ── Indices + Cr + AKI ────────────────────────────────────────────
-trt_idx<-which(all_pts$treated==1&!is.na(all_pts$alb_offset_h))
-n_trt<-length(trt_idx); trt_pids<-all_pts$pid[trt_idx]; trt_talb<-all_pts$alb_offset_h[trt_idx]
-
-cat("  Cr lists + AKI...\n")
-cr_list<-split(cr_all[,c("labresult","offset_h")],cr_all$pid)
-ec<-sapply(cr_list,function(x)min(x$offset_h,na.rm=T))
-all_pts$earliest_cr_h<-ec[as.character(all_pts$pid)]
-all_pts$earliest_cr_h[is.na(all_pts$earliest_cr_h)]<-Inf
-faki<-sapply(cr_list,function(cr){
-  if(nrow(cr)<2)return(NA_real_); cr<-cr[order(cr$offset_h),]; bl<-cr$labresult[1]
-  if(is.na(bl)||bl<=0)return(NA_real_)
-  for(k in 2:nrow(cr)){d<-cr$labresult[k]-bl;r<-cr$labresult[k]/bl
-    if(!is.na(d)&&(d>=0.3||(!is.na(r)&&r>=1.5)))return(cr$offset_h[k])}
-  NA_real_})
-all_pts$first_aki_h<-faki[as.character(all_pts$pid)]
-
-# ── Risk sets (yet-untreated only) ────────────────────────────────
-cat("  Risk sets (yet-untreated)...\n")
-rs_yt<-vector("list",n_trt)
-for(k in seq_len(n_trt)){talb<-trt_talb[k]
-  rs_yt[[k]]<-which(all_pts$icu_discharge_h>talb&(is.na(all_pts$first_aki_h)|all_pts$first_aki_h>talb)&
-    all_pts$earliest_cr_h<=talb&(is.na(all_pts$alb_offset_h)|all_pts$alb_offset_h>talb+PRIMARY_H)&
-    all_pts$pid!=trt_pids[k])
-}
-cat(sprintf("    YT median risk set: %.0f\n",median(sapply(rs_yt,length))))
-
-# ── MICE ──────────────────────────────────────────────────────────
-all_cand <- unique(unlist(lapply(SPECS, `[[`, "vars")))
-all_cand <- intersect(all_cand, names(all_pts))
-all_cand <- all_cand[vapply(all_cand,function(v){x<-all_pts[[v]];!all(is.na(x))&&var(x,na.rm=T)>1e-10},logical(1))]
-to_imp <- all_cand[vapply(all_cand,function(v)any(is.na(all_pts[[v]])),logical(1))]
-set.seed(2026)
-cat(sprintf("\n  MICE m=%d on %d vars: %s\n",M_IMP,length(to_imp),paste(to_imp,collapse=", ")))
-if(length(to_imp)>0){
-  md<-all_pts[,c("treated",all_cand)]; mt<-rep("",ncol(md)); names(mt)<-names(md)
-  for(v in to_imp) mt[v]<-"pmm"
-  imp<-mice(md,m=M_IMP,method=mt,printFlag=FALSE,maxit=10)
-  for(v in to_imp){vals<-sapply(1:M_IMP,function(m)complete(imp,m)[[v]])
-    all_pts[[v]]<-rowMeans(vals,na.rm=TRUE)}
-}
-
-pv<-intersect(SPECS$primary$vars,names(all_pts))
-pfml<-as.formula(paste("treated~",paste(pv,collapse="+")))
-pfit<-suppressWarnings(glm(pfml,data=all_pts,family=binomial()))
-caliper<-CALIPER_SD*sd(predict(pfit,type="response"),na.rm=TRUE)
-cat(sprintf("  Caliper: %.4f\n",caliper))
-
-# ═══════════════════════════════════════════════════════════════════
-# RUN 3 SPECS
-# ═══════════════════════════════════════════════════════════════════
-all_res<-list(); all_pairs<-list()
-for(sn in names(SPECS)){
-  out<-run_spec_pool(sn,SPECS[[sn]],"yet_untreated",all_pts,trt_idx,rs_yt,cr_list,trt_talb,caliper)
-  if(!is.null(out)){all_res[[length(all_res)+1]]<-out$results
-    all_pairs[[paste(sn,"yet_untreated",sep="_")]]<-out$pairs}
-}
-
-res_all<-do.call(rbind,all_res); res_all$db<-db
-write.csv(res_all,file.path(RESULTS,sprintf("did_riskset_%s.csv",tag)),row.names=FALSE)
-for(nm in names(all_pairs))
-  write.csv(all_pairs[[nm]],file.path(RESULTS,sprintf("did_pairs_%s_%s.csv",nm,tag)),row.names=FALSE)
-
-# ── Binary outcomes (same structure as mg_aki) ────────────────────
-cat(sprintf("\n%s\n  BINARY OUTCOMES: %s\n%s\n", SEP, db, SEP))
-pri_pairs <- all_pairs[["primary_yet_untreated"]]
-if (!is.null(pri_pairs) && nrow(pri_pairs) > 0) {
-  npairs <- nrow(pri_pairs)
-  rrt_map <- if ("rrt_offset_h" %in% names(all_pts)) setNames(all_pts$rrt_offset_h, as.character(all_pts$pid)) else NULL
-  death_map <- if ("death_offset_h" %in% names(all_pts)) setNames(all_pts$death_offset_h, as.character(all_pts$pid)) else NULL
+make_pair_outcomes <- function(pairs, all_pts, cr_list) {
+  rrt_map <- setNames(all_pts$rrt_offset_h, as.character(all_pts$pid))
   mort_map <- setNames(all_pts$hosp_mortality, as.character(all_pts$pid))
+  alb_map <- setNames(all_pts$alb_offset_h, as.character(all_pts$pid))
+  rows <- vector("list", nrow(pairs))
+  for (i in seq_len(nrow(pairs))) {
+    tp <- as.character(pairs$trt_pid[i])
+    cp <- as.character(pairs$ctl_pid[i])
+    t0 <- pairs$t0[i]
+    ot <- scr_kdigo_outcomes(cr_list[[tp]], pairs$baseline_trt[i], t0, rrt_map[tp])
+    oc <- scr_kdigo_outcomes(cr_list[[cp]], pairs$baseline_ctl[i], t0, rrt_map[cp])
+    calb <- alb_map[cp]
+    censor48 <- !is.na(calb) && calb <= t0 + 48
+    censor7d <- !is.na(calb) && calb <= t0 + 168
+    if (censor48) {
+      names48 <- c("aki1_48h", "aki2_48h", "aki3_48h", "aki2_rrt_48h")
+      ot[names48] <- NA_integer_
+      oc[names48] <- NA_integer_
+    }
+    if (censor7d) {
+      names7d <- c("aki1_7d", "aki2_7d", "aki3_7d", "aki2_rrt_7d")
+      ot[names7d] <- NA_integer_
+      oc[names7d] <- NA_integer_
+    }
+    row <- data.frame(
+      trt_pid = pairs$trt_pid[i], ctl_pid = pairs$ctl_pid[i],
+      t0 = t0, baseline_trt = pairs$baseline_trt[i],
+      baseline_ctl = pairs$baseline_ctl[i], stringsAsFactors = FALSE
+    )
+    for (nm in names(ot)) {
+      row[[paste0(nm, "_trt")]] <- ot[nm]
+      row[[paste0(nm, "_ctl")]] <- oc[nm]
+    }
+    row$hosp_mort_trt <- as.integer(mort_map[tp] == 1)
+    row$hosp_mort_ctl <- as.integer(mort_map[cp] == 1)
+    rows[[i]] <- row
+  }
+  do.call(rbind, rows)
+}
 
-  compute_kdigo <- function(cr_post, bl, t0_h, window_h, rrt_in_window) {
-    if (is.na(bl) || bl <= 0) return(c(NA, NA, NA))
-    if (nrow(cr_post) == 0 && !rrt_in_window) return(c(NA, NA, NA))
-    stg1 <- 0L; stg2 <- 0L; stg3 <- 0L
-    if (rrt_in_window) { stg1 <- 1L; stg2 <- 1L; stg3 <- 1L }
-    if (nrow(cr_post) > 0) {
-      for (i in seq_len(nrow(cr_post))) {
-        h <- cr_post$offset_h[i] - t0_h; val <- cr_post$labresult[i]
-        delta <- val - bl; ratio <- val / bl
-        if (window_h <= 48) { if (delta >= 0.3 || ratio >= 1.5) stg1 <- 1L }
-        else { if (h <= 48 && (delta >= 0.3 || ratio >= 1.5)) stg1 <- 1L; if (h > 48 && ratio >= 1.5) stg1 <- 1L }
-        if (ratio >= 2.0) stg2 <- 1L; if (ratio >= 3.0 || val >= 4.0) stg3 <- 1L
+cat(sprintf("\n02_psm.R | %s | %s | frozen main experiment\n", db, variant))
+all_pts <- read.csv(file.path(RESULTS, sprintf("did_all_%s.csv", tag)),
+                    stringsAsFactors = FALSE)
+cr_all <- read.csv(file.path(RESULTS, sprintf("did_cr_all_%s.csv", tag)),
+                   stringsAsFactors = FALSE)
+labs <- read.csv(file.path(RESULTS, sprintf("did_labs_all_%s.csv", tag)),
+                 stringsAsFactors = FALSE)
+cr_id <- if ("patientunitstayid" %in% names(cr_all)) "patientunitstayid" else "stay_id"
+lab_id <- if ("patientunitstayid" %in% names(labs)) "patientunitstayid" else "stay_id"
+cr_all$pid <- cr_all[[cr_id]]
+labs$pid <- labs[[lab_id]]
+cr_all <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
+cr_list <- split(cr_all[, c("labresult", "offset_h")], cr_all$pid)
+all_pts <- extract_static_last(labs, all_pts)
+all_pts$egfr_stratum <- egfr_stratum(all_pts$egfr)
+rm(labs)
+gc()
+
+early_value <- setNames(all_pts$cr_ref_early, as.character(all_pts$pid))
+early_offset <- setNames(all_pts$cr_ref_early_offset_h, as.character(all_pts$pid))
+all_pts$first_prevalent_h <- vapply(as.character(all_pts$pid), function(pid) {
+  first_prevalent_aki_time(cr_list[[pid]], early_value[pid], early_offset[pid])
+}, numeric(1))
+
+treated_all <- which(all_pts$treated == 1 & !is.na(all_pts$alb_offset_h))
+treated_ok <- treated_all[
+  all_pts$cr_ref_early_offset_h[treated_all] <= all_pts$alb_offset_h[treated_all] &
+    (is.na(all_pts$first_prevalent_h[treated_all]) |
+       all_pts$first_prevalent_h[treated_all] > all_pts$alb_offset_h[treated_all]) &
+    all_pts$icu_discharge_h[treated_all] > all_pts$alb_offset_h[treated_all]
+]
+cat(sprintf("  treated eligible after pair-time prevalent screen: %d/%d\n",
+            length(treated_ok), length(treated_all)))
+
+strata_to_run <- if (variant == "pooled") "Overall" else levels(all_pts$egfr_stratum)
+all_match <- list()
+all_balance <- list()
+all_binary <- list()
+all_pair_outcomes <- list()
+
+for (stratum in strata_to_run) {
+  in_stratum <- if (stratum == "Overall") rep(TRUE, nrow(all_pts)) else
+    eligible_same_stratum(all_pts$egfr_stratum, stratum)
+  trt_idx <- treated_ok[in_stratum[treated_ok]]
+  ps_vars <- usable_ps_vars(all_pts[in_stratum, , drop = FALSE],
+                            if (variant == "pooled") PS_VARS_POOLED else PS_VARS_EGFR)
+  ps_out <- average_ps(all_pts[in_stratum, , drop = FALSE], ps_vars)
+  all_pts$ps <- NA_real_
+  all_pts$ps[in_stratum] <- ps_out$ps
+  all_pts[in_stratum, ps_vars] <- ps_out$completed[, ps_vars, drop = FALSE]
+  caliper <- CALIPER_SD * sd(all_pts$ps[in_stratum], na.rm = TRUE)
+
+  matched_rows <- list()
+  for (k in seq_along(trt_idx)) {
+    ti <- trt_idx[k]
+    t0 <- all_pts$alb_offset_h[ti]
+    risk <- which(
+      in_stratum & all_pts$pid != all_pts$pid[ti] &
+        all_pts$icu_discharge_h > t0 &
+        all_pts$cr_ref_early_offset_h <= t0 &
+        (is.na(all_pts$first_prevalent_h) | all_pts$first_prevalent_h > t0) &
+        (is.na(all_pts$alb_offset_h) | all_pts$alb_offset_h > t0 + PRIMARY_H)
+    )
+    if (!length(risk)) next
+    distance <- abs(all_pts$ps[risk] - all_pts$ps[ti])
+    candidates <- risk[order(distance)]
+    candidates <- candidates[distance[order(distance)] <= caliper]
+    if (!length(candidates)) next
+    bt <- max_at_latest_before(
+      cr_list[[as.character(all_pts$pid[ti])]], t0,
+      all_pts$baseline_cr[ti], all_pts$baseline_cr_offset_h[ti]
+    )
+    if (is.na(bt["value"])) next
+    chosen <- NA_integer_
+    bc <- c(value = NA_real_, offset_h = NA_real_)
+    for (ci in candidates) {
+      bc_try <- max_at_latest_before(
+        cr_list[[as.character(all_pts$pid[ci])]], t0,
+        all_pts$baseline_cr[ci], all_pts$baseline_cr_offset_h[ci]
+      )
+      if (!is.na(bc_try["value"])) {
+        chosen <- ci
+        bc <- bc_try
+        break
       }
     }
-    c(stg1, stg2, stg3)
+    if (is.na(chosen)) next
+    matched_rows[[length(matched_rows) + 1L]] <- data.frame(
+      trt_idx = ti, ctl_idx = chosen, trt_pid = all_pts$pid[ti],
+      ctl_pid = all_pts$pid[chosen], t0 = t0,
+      baseline_trt = bt["value"], baseline_ctl = bc["value"],
+      baseline_trt_offset_h = bt["offset_h"],
+      baseline_ctl_offset_h = bc["offset_h"], stratum = stratum
+    )
+  }
+  pairs <- if (length(matched_rows)) do.call(rbind, matched_rows) else data.frame()
+  n_match <- nrow(pairs)
+  match_rate <- if (length(trt_idx)) n_match / length(trt_idx) else NA_real_
+  cat(sprintf("  %s matched: %d/%d (%.1f%%), caliper %.5f\n",
+              stratum, n_match, length(trt_idx), 100 * match_rate, caliper))
+  if (is.na(match_rate) || match_rate < 0.90) {
+    stop(sprintf("GUARD: %s match rate %.1f%% is below 90%%", stratum,
+                 100 * match_rate))
   }
 
-  outcome_rows <- vector("list", npairs)
-  for (k in seq_len(npairs)) {
-    tp <- as.character(pri_pairs$trt_pid[k]); cp <- as.character(pri_pairs$ctl_pid[k])
-    t0 <- pri_pairs$t_alb[k]
-    bl_t <- find_cr_pre(cr_list[[tp]], t0)[1]; bl_c <- find_cr_pre(cr_list[[cp]], t0)[1]
-    cr_t <- cr_list[[tp]]; cr_c <- cr_list[[cp]]
-    cr_t48 <- if (!is.null(cr_t)) cr_t[cr_t$offset_h > t0 & cr_t$offset_h <= t0+48,] else data.frame()
-    cr_c48 <- if (!is.null(cr_c)) cr_c[cr_c$offset_h > t0 & cr_c$offset_h <= t0+48,] else data.frame()
-    cr_t7d <- if (!is.null(cr_t)) cr_t[cr_t$offset_h > t0 & cr_t$offset_h <= t0+168,] else data.frame()
-    cr_c7d <- if (!is.null(cr_c)) cr_c[cr_c$offset_h > t0 & cr_c$offset_h <= t0+168,] else data.frame()
-    rrt_t <- if (!is.null(rrt_map)) rrt_map[tp] else NA; rrt_c <- if (!is.null(rrt_map)) rrt_map[cp] else NA
-    rrt_t48 <- !is.na(rrt_t) && rrt_t > t0 && rrt_t <= t0+48; rrt_c48 <- !is.na(rrt_c) && rrt_c > t0 && rrt_c <= t0+48
-    rrt_t7d <- !is.na(rrt_t) && rrt_t > t0 && rrt_t <= t0+168; rrt_c7d <- !is.na(rrt_c) && rrt_c > t0 && rrt_c <= t0+168
-    d_t <- if (!is.null(death_map)) death_map[tp] else NA; d_c <- if (!is.null(death_map)) death_map[cp] else NA
-    kt48 <- compute_kdigo(cr_t48, bl_t, t0, 48, rrt_t48); kc48 <- compute_kdigo(cr_c48, bl_c, t0, 48, rrt_c48)
-    kt7d <- compute_kdigo(cr_t7d, bl_t, t0, 168, rrt_t7d); kc7d <- compute_kdigo(cr_c7d, bl_c, t0, 168, rrt_c7d)
-    outcome_rows[[k]] <- data.frame(trt_pid=tp, ctl_pid=cp, t0=t0,
-      aki1_48h_trt=kt48[1], aki1_48h_ctl=kc48[1], aki2_48h_trt=kt48[2], aki2_48h_ctl=kc48[2],
-      aki3_48h_trt=kt48[3], aki3_48h_ctl=kc48[3],
-      aki1_7d_trt=kt7d[1], aki1_7d_ctl=kc7d[1], aki2_7d_trt=kt7d[2], aki2_7d_ctl=kc7d[2],
-      aki3_7d_trt=kt7d[3], aki3_7d_ctl=kc7d[3],
-      hosp_mort_trt=as.integer(mort_map[tp]==1), hosp_mort_ctl=as.integer(mort_map[cp]==1),
-      stringsAsFactors=FALSE)
+  smds <- vapply(ps_vars, function(v) {
+    smd_one(all_pts[[v]][pairs$trt_idx], all_pts[[v]][pairs$ctl_idx])
+  }, numeric(1))
+  balance <- data.frame(
+    db = db, variant = variant, stratum = stratum,
+    variable = names(smds), smd = as.numeric(smds)
+  )
+  violations <- names(smds[smds > 0.10])
+  cat(sprintf("    balance max=%.3f; violations=%d\n", max(smds),
+              length(violations)))
+
+  pair_outcomes <- make_pair_outcomes(pairs, all_pts, cr_list)
+  outcomes <- c(
+    "aki1_48h", "aki2_48h", "aki3_48h",
+    "aki1_7d", "aki2_7d", "aki3_7d",
+    "aki2_rrt_48h", "aki2_rrt_7d", "hosp_mort"
+  )
+  binary <- list()
+  for (outcome in outcomes) {
+    y_t <- pair_outcomes[[paste0(outcome, "_trt")]]
+    y_c <- pair_outcomes[[paste0(outcome, "_ctl")]]
+    methods <- c("psm", if (length(violations)) "psm_dr")
+    for (method in methods) {
+      adj_t <- adj_c <- NULL
+      if (method == "psm_dr") {
+        adj_t <- all_pts[pairs$trt_idx, violations, drop = FALSE]
+        adj_c <- all_pts[pairs$ctl_idx, violations, drop = FALSE]
+      }
+      estimate <- pair_binary_or(y_t, y_c, adj_t, adj_c)
+      binary[[length(binary) + 1L]] <- cbind(
+        data.frame(db = db, variant = variant, stratum = stratum,
+                   outcome = outcome, method = method),
+        estimate
+      )
+    }
   }
-  bo <- do.call(rbind, outcome_rows)
-  outcome_names <- c("aki1_48h","aki2_48h","aki3_48h","aki1_7d","aki2_7d","aki3_7d","hosp_mort")
-  binary_res <- list()
-  for (oname in outcome_names) {
-    y_t <- bo[[paste0(oname,"_trt")]]; y_c <- bo[[paste0(oname,"_ctl")]]
-    valid <- !is.na(y_t) & !is.na(y_c); nv <- sum(valid)
-    if (nv < 30 || sum(y_t[valid])+sum(y_c[valid]) < 5) {
-      binary_res[[length(binary_res)+1]] <- data.frame(db=db,outcome=oname,n=nv,rate_trt=NA,rate_ctl=NA,or=NA,ci_lo=NA,ci_hi=NA,p=NA); next }
-    y <- c(y_t[valid], y_c[valid]); x <- rep(c(1L,0L), each=nv)
-    fit <- tryCatch(glm(y~x, family=quasibinomial()), error=function(e) NULL)
-    if (is.null(fit)) { binary_res[[length(binary_res)+1]] <- data.frame(db=db,outcome=oname,n=nv,rate_trt=mean(y_t[valid]),rate_ctl=mean(y_c[valid]),or=NA,ci_lo=NA,ci_hi=NA,p=NA); next }
-    ct <- safe_coeftest(fit); lor <- ct["x",1]; se <- ct["x",2]; pv <- ct["x",4]
-    binary_res[[length(binary_res)+1]] <- data.frame(db=db,outcome=oname,n=nv,
-      rate_trt=mean(y_t[valid]),rate_ctl=mean(y_c[valid]),or=exp(lor),ci_lo=exp(lor-1.96*se),ci_hi=exp(lor+1.96*se),p=pv)
-  }
-  br <- do.call(rbind, binary_res)
-  cat("\n  outcome         rate_trt  rate_ctl  OR (95% CI)            P\n")
-  for (i in seq_len(nrow(br))) { r <- br[i,]
-    if (is.na(r$or)) { cat(sprintf("  %-14s  --\n",r$outcome)); next }
-    sig <- if (!is.na(r$p) && r$p < 0.05) " *" else "  "
-    cat(sprintf("  %-14s  %5.1f%%    %5.1f%%    %.2f (%.2f-%.2f)  %.4f%s  n=%d\n",
-                r$outcome, 100*r$rate_trt, 100*r$rate_ctl, r$or, r$ci_lo, r$ci_hi, r$p, sig, r$n))
-  }
-  write.csv(br, file.path(RESULTS, sprintf("did_binary_%s.csv", tag)), row.names=FALSE)
-  write.csv(bo, file.path(RESULTS, sprintf("did_binary_pairs_%s.csv", tag)), row.names=FALSE)
+  binary <- do.call(rbind, binary)
+  all_match[[length(all_match) + 1L]] <- data.frame(
+    db = db, variant = variant, stratum = stratum,
+    treated_eligible = length(trt_idx), matched = n_match,
+    match_rate = match_rate, caliper = caliper,
+    max_smd = max(smds), n_viol = length(violations)
+  )
+  all_balance[[length(all_balance) + 1L]] <- balance
+  all_binary[[length(all_binary) + 1L]] <- binary
+  all_pair_outcomes[[length(all_pair_outcomes) + 1L]] <- merge(
+    pairs, pair_outcomes,
+    by = c("trt_pid", "ctl_pid", "t0", "baseline_trt", "baseline_ctl")
+  )
 }
 
-cat(sprintf("\n%s\n02_psm.R -- %s COMPLETE\n%s\n", SEP, db, SEP))
+match_summary <- do.call(rbind, all_match)
+balance_all <- do.call(rbind, all_balance)
+binary_all <- do.call(rbind, all_binary)
+pairs_all <- do.call(rbind, all_pair_outcomes)
+write.csv(match_summary,
+          file.path(RESULTS, sprintf("did_riskset_%s_%s.csv", variant, tag)),
+          row.names = FALSE)
+write.csv(balance_all,
+          file.path(RESULTS, sprintf("psm_balance_%s_%s.csv", variant, tag)),
+          row.names = FALSE)
+write.csv(binary_all,
+          file.path(RESULTS, sprintf("did_binary_%s_%s.csv", variant, tag)),
+          row.names = FALSE)
+write.csv(pairs_all,
+          file.path(RESULTS, sprintf(
+            "did_pairs_primary_yet_untreated_%s_%s.csv", variant, tag
+          )),
+          row.names = FALSE)
+cat(sprintf("02_psm.R | %s | %s | COMPLETE\n", db, variant))

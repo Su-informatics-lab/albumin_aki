@@ -8,6 +8,7 @@ results/did_binary_pairs_*.csv
 !results/did_hte_*.csv
 !results/did_hte_interact_*.csv
 !results/did_consort_*.csv
+!results/probe_nopost_cr_*.csv
 logs/
 *.csv.gz
 __pycache__/
