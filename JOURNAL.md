@@ -2889,3 +2889,73 @@ Committed result families include the complete MIMIC
 `iuh_stratified_sparse_cells.csv`. No pair file or spot-check file is staged.
 
 >>> RESULTS-GATE STOP. Do not alter or rescue the frozen estimator; supervisor review is required before any additional IUH analysis. <<<
+
+---
+
+## Entry 23 — Supervisor verdict on Entry 22: qualified IUH replication (candid)  (2026-07-19, Claude)
+
+**Verdict, no spin.** The IUH primary interaction **replicated directionally and significantly** —
+KDIGO≥1 continuous eGFR interaction OR per +30 eGFR **0.533 (P=3e-06, 48h) / 0.552 (P=2e-05, 7d)**,
+concordant with MIMIC (0.42/0.47). **But it is a qualified, not clean, replication:** (i) matching never
+balanced eGFR (pooled SMD 0.247; 4/6 strata continuous-eGFR SMD >0.10; worst covariate SMD 0.387), so the
+interaction is estimated on imbalanced pairs; (ii) the per-stratum ladder is **non-monotone at 48h**
+(computed-eGFR KDIGO≥1: G1 2.31 > G2 1.28 < G3+ 1.47 — G1 highest, opposite of MIMIC); (iii) the
+independent **lab-reported-eGFR sensitivity is mixed / non-monotone at 48h**; (iv) mortality remains a
+crossover/selection warning, not a clean falsification. Codex's own framing — "the frozen IUH design has
+not delivered a balance-qualified replication" — is correct and is accepted.
+
+**MIMIC got stronger this round** (not IUH): P-F shows the gradient holds under absolute-Δ and
+fixed-threshold KDIGO (not a relative-threshold artifact); the honest patient-disjoint forest (largest
+component 2.2%, calibration ~0.97) still ranks eGFR #1; the ≥2 non-monotonicity is a definition/sparsity
+effect, not a second modifier → one renal-reserve axis, solid **in MIMIC**.
+
+**Honest standing:** MIMIC-primary (clean, robust) + **directional-but-imbalanced IUH support** + weak,
+compromised eICU. This is **not** a clean multi-database validation; it is a strong single-center finding
+with concordant-but-limited external signal. All four IUH caveats above are front-of-limitations material.
+
+**Do not rescue the frozen estimator** (Codex's stop is right). Open decision for Haining: (A) accept IUH
+as directional support and proceed to STROBE + manuscript with honest limitations — no re-match, no
+shopping [supervisor-recommended]; or (B) pre-register an IUH balance amendment (continuous-eGFR / overlap
+weighting / trimming), applied regardless of outcome, to seek a balance-qualified replication (more work,
+may still fail in n=1,375, and carries a shopping-appearance risk that must be managed by pre-registration).
+
+>>> Awaiting Haining's call: (A) write up MIMIC-primary + IUH-directional-limited, or (B) pre-registered IUH balance amendment. No estimator rescue either way. <<<
+
+---
+
+## Entry 24 — Supervisor: Yan clinical input (dose, not product) + data-science salvage plan  (2026-07-20, Claude)
+
+**Cross-DB honest read recorded first:** the eGFR *gradient* is clean in MIMIC, echoed by IUH at 7d only,
+and **not reproduced in eICU** at the stratum level (eICU per-stratum ORs are flat and reverse at G3+, even
+though its continuous-interaction OR was <1 — a parameterization discordance). The trend plot, not the
+interaction-OR summary, is the honest cross-DB view. What replicates cross-database is the **overall harm
+signal** (albumin → more AKI: MIMIC strong, eICU concordant, ALBICS-consistent), not the modifier.
+
+**Dr. Yan clinical input (important, changes the dose arm):**
+1. **5% vs 25% is NOT a meaningful exposure distinction.** Both are diluted to ~4–5% for continuous
+   postoperative infusion (giving 25% neat would drive serum albumin toward 80 g/L vs normal ~40). Product
+   concentration is "fast vs slow," not a different treatment. Our earlier "25% vs 5% null" is expected/uninformative — drop product as an exposure; keep only as provenance.
+2. **The meaningful exposure is total albumin GRAMS (oncotic load), not product.** And our earlier grams were
+   computed wrong ("first-product concentration × total 24h volume"), which mis-estimates mixed/diluted
+   courses. Correct, **dilution-invariant** formula: grams = Σ over albumin events of (event amount_mL ×
+   event product concentration). Diluting a fixed mass into more volume does not change the grams.
+
+**Authorized data-science plan (Haining approved "data sci 方法"):**
+- **Fix grams**, but VERIFY FIRST from raw MIMIC `inputevents` (220862/220864): confirm whether `amount`
+  is product-mL (→ grams = mL×conc) or diluted volume, by hand-checking a few patients (read-the-raw-table).
+  Also compute total infused **volume** (fluid load) separately.
+- **Dose-response (mechanistic, MIMIC primary; IUH if grams computable; eICU cannot — volume unreliable):**
+  total grams → AKI (KDIGO≥1/≥2), as continuous + tertiles + **spline**; and **grams × eGFR** interaction
+  (hyperoncotic/osmotic-nephrosis hypothesis: higher load harms more at low reserve). Report total volume too.
+- **Cross-DB gradient re-tests:** continuous-eGFR **spline** for KDIGO≥1 in all three DBs on a common scale
+  (does eICU have a continuous gradient the 3 bins hide?); **random-effects meta-analysis** of the
+  treatment×eGFR interaction across MIMIC/eICU/IUH with **I²** (an honest pooled-interaction + heterogeneity number).
+- **Caveats (state plainly):** dose-response among treated is **within-treated / confounded by indication**
+  (sicker → more albumin → more AKI); it is Bradford-Hill *supportive*, not causal. Grams/volume not
+  reliably computable in eICU. Everything hypothesis-generating.
+
+Purpose: know exactly how strong/replicable the gradient AND the dose-response are, then take the honest
+numbers to the clinician meeting (Yan/Eadon/Meng) to set framing (harm phenotype + dose-response primary;
+eGFR gradient MIMIC-secondary) and venue. No estimator rescue; no product-as-exposure.
+
+>>> APPROVED (data-science salvage): verify+fix grams; dose-response + grams×eGFR; continuous-eGFR spline all DBs; random-effects meta-analysis of the interaction. Report Entry 25; STOP. Then clinician meeting. <<<
