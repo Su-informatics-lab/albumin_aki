@@ -3672,3 +3672,206 @@ center, null. Two non-exclusive readings, and they are testable:
 This is also the point to bring Su in — the BIDMC-practice judgment is partly clinical.
 
 >>> CODEX TASK QUEUED (Entry 31, approved by Haining 2026-07-20): (A) E-value on the MIMIC AKI≥1 estimates; (B) eICU between-hospital heterogeneity of albumin→AKI (single-center-quirk vs practice-heterogeneity test); (C) MIMIC albumin-practice + case-mix characterization vs eICU/IUH for the Su materials. Read-only on frozen v3.3 pairs; PS/exposure/pairs unchanged; aggregate CSVs only; patient-level stays on HPC. Report Entry 31, STOP. <<<
+
+---
+
+## Entry 31 — Confounding and generalizability battery (2026-07-20, Codex)
+
+### Scope and integrity
+
+This battery was read-only on the frozen v3.3 pooled pairs: MIMIC 5,428,
+eICU 1,949, and IUH 1,375. It did not fit a propensity score, rematch, or
+change exposure, baseline, censoring, or outcomes. Hospital analyses subset
+pairs by the treated patient's hospital and retain that patient's frozen
+matched control. The same frozen balance-triggered adjustment is used for DR.
+
+Slurm jobs completed with exit 0:
+
+- Tempest `4263144`: MIMIC completed; the eICU step exposed a zero-row
+  aggregate-table construction error after estimation.
+- Tempest `4263193`: eICU completed after the output-only repair (1m10s).
+- Quartz `9724572`: IUH completed (16s). The preceding attempt `9724566`
+  stopped before reading data because the eICU-only meta-analysis package was
+  loaded globally; package loading was scoped to eICU and the IUH job was
+  rerun.
+
+Aggregate QC passed for 12 CSVs. There are no patient identifiers. The
+hospital file has 36 hospitals x 2 estimators; sparse flags exactly equal
+`events_treated <20 OR events_control <20`. Seven hospitals satisfy the
+prespecified `>=100 pairs AND >=20 events/arm` interpretation threshold.
+
+### A. E-values
+
+Because AKI>=1 is common, the frozen DR OR was **not** reinterpreted as a risk
+ratio. `Matched RR` is the observed treated/control matched-rate ratio with an
+HC1 log-link CI. `DR-RD RR` is contextual: frozen matched control risk plus
+the frozen DR RD, divided by the matched control risk; its CI maps the DR RD
+CI onto that control risk.
+
+| DB / horizon | Matched rates treated/control | Matched RR [95% CI] | E-value point / near-null CI | DR-RD-implied RR [95% CI] | E-value point / near-null CI |
+|---|---:|---:|---:|---:|---:|
+| MIMIC 48h | 35.35% / 25.16% | 1.41 [1.32, 1.50] | 2.16 / 1.97 | 1.49 [1.42, 1.56] | 2.34 / 2.18 |
+| MIMIC 7d | 39.84% / 28.89% | 1.38 [1.30, 1.47] | 2.10 / 1.92 | 1.41 [1.34, 1.48] | 2.17 / 2.02 |
+| eICU 48h | 24.06% / 22.36% | 1.08 [0.96, 1.21] | 1.36 / 1.00 | 1.15 [1.03, 1.27] | 1.57 / 1.22 |
+| eICU 7d | 26.72% / 24.35% | 1.10 [0.98, 1.23] | 1.42 / 1.00 | 1.16 [1.04, 1.27] | 1.58 / 1.25 |
+
+Reading: to move the MIMIC matched-rate association fully to null, an
+unmeasured confounder would need risk-ratio associations of approximately
+2.10-2.16 with both albumin receipt and AKI; to move the confidence interval
+to include null requires approximately 1.92-1.97. On the DR-RD context the
+requirements are about 2.17-2.34 and 2.02-2.18. These are moderate-to-strong,
+not trivial, but are plausible for an omitted composite perioperative
+severity/bleeding indication. Measured-variable SMDs are not RRs and cannot
+be compared numerically with an E-value; this battery therefore does **not**
+claim that any single measured covariate meets both RR requirements. It does
+show very strong raw selection on vasopressor use, MAP, ventilation, and RBC
+exposure in MIMIC (Part C), making residual indication severity credible.
+eICU's observed-rate CIs already cross null, so their CI E-values are 1.
+
+### B. eICU hospital heterogeneity
+
+#### Interpretable hospitals
+
+All rows below meet the event/pair threshold. Values are OR [95% CI]; RD
+[95% CI]. Exact P values and all 29 grey/non-interpretable hospitals remain
+in `eicu_hospital_effects.csv`.
+
+| Hospital (type; beds; region) | Pairs; events T/C | PSM OR; RD | DR OR; RD |
+|---|---:|---|---|
+| 73 (teaching; >=500; Midwest) | 227; 42/53 | 0.75 [0.47, 1.18]; -0.048 [-0.123, 0.026] | 0.54 [0.33, 0.88]; -0.102 [-0.177, -0.027] |
+| 142 (non-teaching; >=500; South) | 136; 32/34 | 0.92 [0.53, 1.61]; -0.015 [-0.117, 0.088] | 1.03 [0.58, 1.84]; +0.006 [-0.097, 0.109] |
+| 195 (teaching; 250-499; South) | 107; 34/43 | 0.69 [0.39, 1.22]; -0.084 [-0.213, 0.045] | 1.10 [0.59, 2.07]; +0.020 [-0.109, 0.150] |
+| 248 (non-teaching; 100-249; Midwest) | 156; 39/34 | 1.20 [0.71, 2.03]; +0.032 [-0.062, 0.126] | 1.46 [0.82, 2.61]; +0.057 [-0.037, 0.151] |
+| 252 (teaching; >=500; Midwest) | 120; 31/23 | 1.47 [0.80, 2.71]; +0.067 [-0.039, 0.172] | 1.73 [0.89, 3.39]; +0.091 [-0.018, 0.200] |
+| 413 (non-teaching; unknown beds; West) | 181; 44/35 | 1.34 [0.81, 2.22]; +0.050 [-0.035, 0.135] | 1.49 [0.86, 2.57]; +0.065 [-0.024, 0.153] |
+| 420 (teaching; >=500; Northeast) | 174; 46/25 | 2.14 [1.24, 3.69]; +0.121 [0.037, 0.205] | 3.76 [1.70, 8.33]; +0.159 [0.067, 0.252] |
+
+Across these seven hospitals, PSM ORs ranged 0.69-2.14 (median 1.20; IQR
+0.83-1.40) and DR ORs 0.54-3.76 (median 1.46; IQR 1.07-1.61). One hospital
+had PSM OR >=1.5 and two had DR OR >=1.5.
+
+#### Grouped results
+
+Values again are PSM OR; RD | DR OR; RD. Full CIs/P values are in the CSV.
+Rows marked **GREY** have <20 events in at least one arm and are not
+interpreted.
+
+| Axis / level | Pairs; events T/C | PSM OR; RD | DR OR; RD |
+|---|---:|---|---|
+| Teaching / teaching | 879; 219/201 | 1.12; +0.020 | 1.26; +0.036 |
+| Teaching / non-teaching | 1,008; 235/221 | 1.08; +0.014 | 1.22; +0.031 |
+| Beds / <100 | **GREY: 1; 1/1** | not estimable | not estimable |
+| Beds / 100-249 | 301; 73/65 | 1.16; +0.027 | 1.44; +0.050 |
+| Beds / 250-499 | 294; 82/85 | 0.95; -0.010 | 1.20; +0.034 |
+| Beds / >=500 | 993; 235/212 | 1.14; +0.023 | 1.25; +0.035 |
+| Beds / unknown | 298; 63/59 | 1.09; +0.013 | 1.12; +0.017 |
+| Region / Midwest | 612; 137/136 | 1.01; +0.002 | 1.04; +0.002 |
+| Region / Northeast | 260; 67/43 | 1.75; +0.092 | 2.30; +0.115 |
+| Region / South | 518; 126/143 | 0.84; -0.033 | 1.03; +0.005 |
+| Region / West | 435; 114/86 | 1.44; +0.064 | 1.60; +0.079 |
+| Region / unknown | **GREY: 62; 10/14** | 0.66; -0.065 | 1.15; +0.014 |
+
+The hospital random-effects meta-analysis was:
+
+| Estimator | Pooled OR [95% CI]; tau2; I2 | Pooled RD [95% CI]; tau2; I2 |
+|---|---|---|
+| PSM | 1.12 [0.83, 1.51]; 0.087; 54.1% | +0.021 [-0.030, 0.073]; 0.0025; 52.8% |
+| DR | 1.31 [0.86, 1.99]; 0.225; 70.7% | +0.040 [-0.025, 0.106]; 0.0053; 68.8% |
+
+**Explicit answer:** MIMIC-magnitude signal is not absent from every eICU
+center. Hospital 420, a large teaching hospital in the Northeast, has a
+MIMIC-like or larger OR under both PSM and DR; the Northeast group also does.
+Hospital 252 crosses 1.5 only under DR, and the West group reaches 1.60 under
+DR. However, teaching hospitals and >=500-bed hospitals as aggregate groups
+do not reach 1.5, the pooled meta-estimates include null, and heterogeneity is
+substantial.
+
+Important limitation: frozen matching was not hospital-constrained. Only
+about 2-3% of pairs link patients from the same hospital; the table therefore
+tests whether the effect varies with the **treated patient's hospital
+context**, using mostly external-hospital frozen controls. It is not a clean
+within-hospital contrast. Requiring same-hospital pairs would leave no
+hospital near the prespecified sample/event threshold, and rematching was
+forbidden. Accordingly, hospital 420 is a heterogeneity signal, not an
+independent center-level replication.
+
+### C. Albumin practice and case mix
+
+#### Frozen matched treated patients
+
+| Feature | MIMIC | eICU | IUH |
+|---|---|---|---|
+| Treated n | 5,428 | 1,949 | 1,375 |
+| Product label | nominal 5% 96.8%, 25% 3.2% | unknown | source label 5% 99.4%, 25% 0.6% |
+| First albumin timing | 9.94h [6.88, 15.20] from ICU admit | 5.20h [1.08, 18.95] from ICU admit | 3.27h [1.63, 7.70] from `max(ICU entry, surgery stop)` |
+| Surgery mix | CABG 21.2%; valve 13.8%; combined 9.3%; other 55.7% | CABG 34.8%; valve 17.8%; combined 6.9%; other 40.5% | CABG 54.8%; valve 27.1%; combined 9.9%; aortic 5.6%; other 2.7% |
+| Aortic surgery flag | 8.7% | 5.5% | 10.8% |
+| Age, median [IQR] | 69 [61, 76] | 67 [59, 76] | 65.2 [56.9, 72.6] |
+| Baseline eGFR, median [IQR] | 90.1 [70.9, 99.6] | 76.5 [56.7, 94.0] | 82.4 [65.4, 96.9] |
+| 8-comorbidity count, median [IQR] | 2 [1, 3] | 1 [1, 2] | 2 [1, 3] |
+
+MIMIC's 5%/25% percentages are nominal item provenance only: Entry 25 showed
+that these labels cannot reliably establish administered concentration or
+grams. eICU concentration is not identifiable. IUH labels are source-derived
+but remain descriptive. T0 is first albumin by definition, so timing from T0
+is zero. Exact surgery-stop timing is not carried in the aligned MIMIC/eICU
+frame; IUH's available offset begins at the later of ICU entry and surgery
+stop, so the timing rows are not fully harmonized. No validated harmonized
+CPB proxy exists; surgery type is reported without relabeling it as CPB.
+
+#### Pre-match severity selection
+
+The comparison is the same eligible ever-treated versus never-treated source
+cohort used by the frozen balance workflow. Values are treated/control;
+signed SMD. These are descriptive selection diagnostics, not adjusted
+effects.
+
+| DB | Severity proxy | Treated / control | Signed SMD |
+|---|---|---:|---:|
+| MIMIC | baseline eGFR | 82.2 / 81.2 | +0.044 |
+| MIMIC | vasopressor at T0 | 58.5% / 26.0% | +0.696 |
+| MIMIC | MAP strictly before T0 | 72.0 / 79.4 | -0.577 |
+| MIMIC | ventilation at T0 | 58.7% / 42.4% | +0.330 |
+| MIMIC | any RBC strictly before T0 | 13.6% / 1.0% | +0.500 |
+| eICU | baseline eGFR | 71.0 / 75.9 | -0.182 |
+| eICU | MAP strictly before T0, available-case | 73.4 / 79.9 | -0.381 |
+| IUH | baseline eGFR | 78.1 / 87.8 | -0.420 |
+| IUH | vasopressor at T0 | 29.3% / 23.2% | +0.140 |
+| IUH | MAP strictly before T0 | 81.9 / 92.4 | -0.686 |
+| IUH | ventilation at T0 | 63.5% / 66.2% | -0.057 |
+
+The eICU MAP row has informative availability (75.98% treated versus 38.48%
+control), so it is descriptive only. Clean eICU vasopressor-at-T0,
+ventilation-at-T0, and pre-T0 RBC comparisons are unavailable; its medication
+data lack continuous support intervals and its ventilation proxy is APACHE
+day 1/post-T0 contaminated. IUH lacks a harmonized pre-T0 RBC stream.
+MIMIC RBC is also near-path and its never-treated index reference differs, so
+it must not be read as a baseline causal covariate.
+
+### Honest synthesis
+
+This battery favors **strong confounding-by-indication plus center/practice
+heterogeneity** over either extreme story. MIMIC's E-values near 2 mean that
+weak confounding alone is insufficient, but the very large pre-match
+vasopressor, MAP, ventilation, and transfusion gaps make a composite omitted
+severity/bleeding indication plausible. The eICU pooled hospital meta-effect
+is uncertain and heterogeneous rather than broadly MIMIC-like. One large
+teaching center and the Northeast context do show a MIMIC-magnitude signal,
+so it is too strong to call MIMIC a wholly unique single-center artifact; but
+the cross-hospital-control limitation prevents treating that center as
+replication. Product/timing and surgery mix also differ materially, with
+important non-harmonized fields. The defensible conclusion remains that the
+MIMIC association is measurement-robust but not causally established or
+generally replicated; residual indication severity and practice
+heterogeneity are more strongly supported than a universal albumin effect.
+
+### Aggregate artifacts and gate
+
+- `results/confounding_evalue_{mimic,eicu}.csv`
+- `results/eicu_hospital_{effects,groups,meta,distribution}.csv`
+- `results/generalizability_case_mix_{mimic,eicu,iuh}.csv`
+- `results/generalizability_prematch_smd_{mimic,eicu,iuh}.csv`
+
+No pair or patient-level file left Tempest/Quartz.
+
+>>> RESULTS-GATE STOP. Entry 31 is ready for supervisor review; frozen v3.3 pairs and estimator remain unchanged. <<<

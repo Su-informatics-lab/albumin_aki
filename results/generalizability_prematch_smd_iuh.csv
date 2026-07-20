@@ -1,0 +1,6 @@
+"db","comparison","variable","label","n_treated","n_control","coverage_treated","coverage_control","mean_or_prevalence_treated","mean_or_prevalence_control","signed_smd","abs_smd","source","note"
+"IUH","eligible ever-treated vs never-treated source cohort","egfr","baseline eGFR",1667,2208,1,1,78.1449024442794,87.8088824713874,-0.419670934457675,0.419670934457675,"did_all","Same raw source-cohort contrast used in frozen balance tables."
+"IUH","eligible ever-treated vs never-treated source cohort","vaso_at_t0","vasopressor status at T0",1667,2208,1,1,0.293341331733653,0.231884057971014,0.139963079252393,0.139963079252393,"interval stream",""
+"IUH","eligible ever-treated vs never-treated source cohort","map_before_t0","most recent MAP strictly before T0",1667,2208,0.973605278944211,0.93070652173913,81.8798521256932,92.3518248175182,-0.685768403940243,0.685768403940243,"MAP stream",""
+"IUH","eligible ever-treated vs never-treated source cohort","vent_at_t0","ventilation status at T0",1667,2208,1,1,0.634673065386923,0.661684782608696,-0.0565721862072247,0.0565721862072247,"interval stream",""
+"IUH","not available as a clean pre-T0 comparison","rbc_before_t0","any RBC administration strictly before T0",NA,NA,NA,NA,NA,NA,NA,NA,"unavailable","No harmonized pre-T0 transfusion stream in this analysis frame."
