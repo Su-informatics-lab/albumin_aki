@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Formal treatment-by-eGFR interaction and prespecified subgroups.
 # Uses the pooled canonical pairs and shared outcome/OR implementation.
-# Usage: Rscript 03_hte.R {mimic|eicu|iuh} [standard|sweep]
+# Usage: Rscript 03_hte.R {mimic|eicu|iuh} [standard|sweep|integrity]
 
 suppressPackageStartupMessages({
   library(sandwich)
@@ -11,13 +11,17 @@ suppressPackageStartupMessages({
 args <- commandArgs(trailingOnly = TRUE)
 if (!(length(args) %in% c(1, 2)) ||
     !(tolower(args[1]) %in% c("mimic", "eicu", "iuh")) ||
-    (length(args) == 2 && !(tolower(args[2]) %in% c("standard", "sweep")))) {
-  stop("Usage: Rscript 03_hte.R {mimic|eicu|iuh} [standard|sweep]")
+    (length(args) == 2 &&
+       !(tolower(args[2]) %in% c("standard", "sweep", "integrity")))) {
+  stop(
+    "Usage: Rscript 03_hte.R {mimic|eicu|iuh} ",
+    "[standard|sweep|integrity]"
+  )
 }
 tag <- tolower(args[1])
 mode <- if (length(args) == 2) tolower(args[2]) else "standard"
-if (mode == "sweep" && tag != "mimic") {
-  stop("The Entry-18c sweep is frozen to MIMIC only")
+if (mode %in% c("sweep", "integrity") && tag != "mimic") {
+  stop("The Entry-18c sweep/integrity repair is frozen to MIMIC only")
 }
 db <- toupper(tag)
 file_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
@@ -45,9 +49,13 @@ canonical <- read.csv(
   stringsAsFactors = FALSE
 )
 
-if (mode == "sweep") {
+if (mode %in% c("sweep", "integrity")) {
   source(file.path(script_dir, "R", "hte_sweep.R"))
-  run_hte_sweep(tag, all_pts, pairs, RESULTS)
+  if (mode == "sweep") {
+    run_hte_sweep(tag, all_pts, pairs, RESULTS)
+  } else {
+    run_hte_integrity_repairs(tag, all_pts, pairs, RESULTS)
+  }
   quit(save = "no", status = 0)
 }
 

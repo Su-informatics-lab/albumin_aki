@@ -770,3 +770,25 @@ run_hte_sweep <- function(tag, all_pts, pairs, results) {
   }
   cat("03_hte.R | MIMIC | ENTRY-18C SWEEP COMPLETE\n")
 }
+
+run_hte_integrity_repairs <- function(tag, all_pts, pairs, results) {
+  if (tag != "mimic") stop("Integrity repairs are frozen to MIMIC only")
+  set.seed(2026)
+  modifiers <- hte_build_modifiers(all_pts, pairs, results)
+  forest <- hte_forest(all_pts, pairs, modifiers, results)
+  outputs <- list(
+    hte_sweep_forest_omnibus_mimic = forest$omnibus,
+    hte_sweep_forest_importance_mimic = forest$importance,
+    hte_sweep_forest_pdp_mimic = forest$pdp,
+    hte_sweep_forest_fold_audit_mimic = forest$fold_audit,
+    hte_probe_kdigo_mimic =
+      hte_probe_kdigo(all_pts, pairs, modifiers, results)
+  )
+  for (nm in names(outputs)) {
+    write.csv(
+      outputs[[nm]], file.path(results, paste0(nm, ".csv")),
+      row.names = FALSE
+    )
+  }
+  cat("03_hte.R | MIMIC | ENTRY-19 INTEGRITY REPAIRS COMPLETE\n")
+}
