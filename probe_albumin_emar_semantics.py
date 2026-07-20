@@ -50,7 +50,11 @@ def main() -> None:
         path = args.mimic_root / folder / f"{table}.csv.gz"
         # MIMIC eMAR detail uses placeholders such as "___" in nominally
         # numeric dose fields. Preserve those fields verbatim for this audit.
-        kwargs = {"all_varchar": True} if table == "emar_detail" else {}
+        kwargs = (
+            {"all_varchar": True}
+            if table in {"emar_detail", "pharmacy", "prescriptions"}
+            else {}
+        )
         con.from_csv_auto(str(path), **kwargs).create_view(table)
 
     raw = con.execute("""

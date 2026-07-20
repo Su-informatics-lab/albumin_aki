@@ -21,6 +21,11 @@ results/did_binary_pairs_*.csv
 !results/iuh_egfr_*.csv
 !results/iuh_balance_probe.csv
 !results/iuh_stratified_*.csv
+!results/probe_albumin_*.csv
+!results/albumin_dose_distribution_*.csv
+!results/albumin_dose_provenance_*.csv
+!results/salvage_egfr_*.csv
+!results/salvage_interaction_meta.csv
 logs/
 *.csv.gz
 __pycache__/
