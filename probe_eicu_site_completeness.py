@@ -94,18 +94,11 @@ def scan_map(root: Path, keep: set[int], t0_min: pd.Series):
     aperiodic = set()
 
     path = resolve(root, "vitalPeriodic")
-    cols = [
-        "patientunitstayid",
-        "observationoffset",
-        "systemicmean",
-        "noninvasivemean",
-    ]
+    cols = ["patientunitstayid", "observationoffset", "systemicmean"]
     for chunk in cohort_chunk(path, cols, keep, chunksize=2_000_000):
         pid = chunk.patientunitstayid
         off = numeric(chunk.observationoffset)
-        sm = numeric(chunk.systemicmean)
-        nm = numeric(chunk.noninvasivemean)
-        value = sm.where(sm.notna(), nm)
+        value = numeric(chunk.systemicmean)
         valid = (
             off.notna()
             & (off < pid.map(t0_min))
