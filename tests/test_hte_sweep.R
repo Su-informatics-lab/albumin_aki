@@ -37,4 +37,34 @@ m <- data.frame(
 )
 s <- hte_step1(p, m)
 stopifnot(nrow(s$tests) == 24 * 4, all(c("or_q", "rd_q") %in% names(s$tests)))
+
+component_pairs <- data.frame(
+  trt_pid = paste0("t", 1:10),
+  ctl_pid = rep(paste0("c", 1:5), each = 2)
+)
+component_folds <- hte_patient_folds(component_pairs)
+stopifnot(
+  component_folds$status == "patient_disjoint_5fold",
+  all(component_folds$fold %in% 1:5),
+  all(component_folds$fold_pair_counts == 2)
+)
+giant_pairs <- data.frame(
+  trt_pid = paste0("g", 1:10),
+  ctl_pid = rep("shared_control", 10)
+)
+stopifnot(
+  hte_patient_folds(giant_pairs)$status ==
+    "demoted_giant_or_too_few_components"
+)
+
+censor_pairs <- data.frame(
+  aki1_48h_trt = c(rep(0, 8), NA, NA),
+  aki1_48h_ctl = c(rep(0, 8), NA, NA),
+  aki1_7d_trt = c(rep(0, 6), rep(NA, 4)),
+  aki1_7d_ctl = c(rep(0, 6), rep(NA, 4))
+)
+stopifnot(
+  sum(hte_horizon_keep(censor_pairs, 48)) == 8,
+  sum(hte_horizon_keep(censor_pairs, 168)) == 6
+)
 cat("test_hte_sweep.R: PASS\n")

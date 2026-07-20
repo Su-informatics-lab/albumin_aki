@@ -362,14 +362,71 @@ hte_prepare_forest <- function(all_pts, pairs, modifiers, results) {
   x
 }
 
+hte_patient_folds <- function(pairs, nfold = 5L) {
+  trt <- as.character(pairs$trt_pid)
+  ctl <- as.character(pairs$ctl_pid)
+  ids <- unique(c(trt, ctl))
+  parent <- seq_along(ids)
+  names(parent) <- ids
+  find_root <- function(i) {
+    while (parent[i] != i) {
+      parent[i] <<- parent[parent[i]]
+      i <- parent[i]
+    }
+    i
+  }
+  union_ids <- function(a, b) {
+    ra <- find_root(unname(parent[a]))
+    rb <- find_root(unname(parent[b]))
+    if (ra != rb) parent[rb] <<- ra
+  }
+  for (i in seq_along(trt)) union_ids(trt[i], ctl[i])
+  roots <- vapply(seq_along(ids), find_root, integer(1))
+  names(roots) <- ids
+  edge_root <- roots[trt]
+  component_sizes <- sort(table(edge_root), decreasing = TRUE)
+  n_components <- length(component_sizes)
+  largest <- if (n_components) max(component_sizes) else 0
+  largest_fraction <- if (nrow(pairs)) largest / nrow(pairs) else NA_real_
+  feasible <- n_components >= nfold && largest_fraction <= .50
+  status <- if (feasible) "patient_disjoint_5fold" else
+    "demoted_giant_or_too_few_components"
+  edge_fold <- rep(NA_integer_, nrow(pairs))
+  if (feasible) {
+    loads <- integer(nfold)
+    component_fold <- setNames(integer(n_components), names(component_sizes))
+    for (component in names(component_sizes)) {
+      chosen <- which.min(loads)
+      component_fold[component] <- chosen
+      loads[chosen] <- loads[chosen] + component_sizes[component]
+    }
+    edge_fold <- unname(component_fold[as.character(edge_root)])
+    ctl_root <- roots[ctl]
+    if (any(edge_root != ctl_root)) {
+      stop("Patient-disjoint fold construction split a matched edge")
+    }
+  }
+  list(
+    fold = edge_fold,
+    status = status,
+    n_components = n_components,
+    largest_component_pairs = largest,
+    largest_component_fraction = largest_fraction,
+    fold_pair_counts = if (feasible) tabulate(edge_fold, nbins = nfold) else
+      integer(nfold)
+  )
+}
+
 hte_forest <- function(all_pts, pairs, modifiers, results) {
   if (!requireNamespace("ranger", quietly = TRUE)) {
     return(list(omnibus = data.frame(status = "ranger_unavailable"),
-                importance = data.frame(), pdp = data.frame()))
+                importance = data.frame(), pdp = data.frame(),
+                fold_audit = data.frame(status = "ranger_unavailable")))
   }
   x <- hte_prepare_forest(all_pts, pairs, modifiers, results)
+  fold_info <- hte_patient_folds(pairs)
   outcomes <- c("aki1_48h", "aki1_7d")
-  omnibus <- importance <- pdp <- list()
+  omnibus <- importance <- pdp <- fold_audit <- list()
   for (oi in seq_along(outcomes)) {
     outcome <- outcomes[oi]
     d <- pairs[[paste0(outcome, "_trt")]] - pairs[[paste0(outcome, "_ctl")]]
@@ -377,23 +434,54 @@ hte_forest <- function(all_pts, pairs, modifiers, results) {
     xv <- x[valid, , drop = FALSE]
     dv <- d[valid]
     n <- length(dv)
-    fold <- sample(rep(1:5, length.out = n))
-    pred <- rep(NA_real_, n)
-    for (k in 1:5) {
-      train <- fold != k
-      dat <- cbind(data.frame(effect = dv[train]), xv[train, , drop = FALSE])
-      fit <- ranger::ranger(effect ~ ., data = dat, num.trees = 1000,
-                            min.node.size = 20, seed = 2026 + oi * 10 + k)
-      pred[!train] <- predict(fit, data = xv[!train, , drop = FALSE])$predictions
-    }
-    cal <- lm(dv ~ I(pred - mean(pred)))
-    ct <- safe_hc1(cal)
-    omnibus[[length(omnibus) + 1L]] <- data.frame(
-      outcome = outcome, method = "5-fold cross-fitted pair-difference R-forest",
-      n_pairs = n, calibration_slope = ct[2, 1],
-      ci_lo = ct[2, 1] - 1.96 * ct[2, 2],
-      ci_hi = ct[2, 1] + 1.96 * ct[2, 2], p_heterogeneity = ct[2, ncol(ct)]
+    fold <- fold_info$fold[valid]
+    fold_counts <- if (all(is.finite(fold))) tabulate(fold, nbins = 5) else
+      integer(5)
+    crossfit_ok <- fold_info$status == "patient_disjoint_5fold" &&
+      all(fold_counts > 0)
+    fold_audit[[length(fold_audit) + 1L]] <- data.frame(
+      outcome = outcome, n_pairs = n, status = if (crossfit_ok)
+        "patient_disjoint_5fold" else "descriptive_only",
+      n_components = fold_info$n_components,
+      largest_component_pairs = fold_info$largest_component_pairs,
+      largest_component_fraction = fold_info$largest_component_fraction,
+      fold1_pairs = fold_counts[1], fold2_pairs = fold_counts[2],
+      fold3_pairs = fold_counts[3], fold4_pairs = fold_counts[4],
+      fold5_pairs = fold_counts[5], patient_overlap_across_folds = 0L
     )
+    if (crossfit_ok) {
+      pred <- rep(NA_real_, n)
+      for (k in 1:5) {
+        train <- fold != k
+        dat <- cbind(data.frame(effect = dv[train]), xv[train, , drop = FALSE])
+        fit <- ranger::ranger(
+          effect ~ ., data = dat, num.trees = 1000,
+          min.node.size = 20, seed = 2026 + oi * 10 + k
+        )
+        pred[!train] <- predict(
+          fit, data = xv[!train, , drop = FALSE
+        ])$predictions
+      }
+      cal <- lm(dv ~ I(pred - mean(pred)))
+      ct <- safe_hc1(cal)
+      omnibus[[length(omnibus) + 1L]] <- data.frame(
+        outcome = outcome,
+        method = "5-fold patient-disjoint pair-difference R-forest",
+        status = "patient_disjoint_5fold", n_pairs = n,
+        calibration_slope = ct[2, 1],
+        ci_lo = ct[2, 1] - 1.96 * ct[2, 2],
+        ci_hi = ct[2, 1] + 1.96 * ct[2, 2],
+        p_heterogeneity = ct[2, ncol(ct)]
+      )
+    } else {
+      omnibus[[length(omnibus) + 1L]] <- data.frame(
+        outcome = outcome,
+        method = "descriptive pair-difference forest; no honest cross-fit",
+        status = "demoted_descriptive_only", n_pairs = n,
+        calibration_slope = NA_real_, ci_lo = NA_real_, ci_hi = NA_real_,
+        p_heterogeneity = NA_real_
+      )
+    }
     final_dat <- cbind(data.frame(effect = dv), xv)
     final <- ranger::ranger(effect ~ ., data = final_dat, num.trees = 2000,
                             min.node.size = 20, importance = "permutation",
@@ -424,7 +512,7 @@ hte_forest <- function(all_pts, pairs, modifiers, results) {
     }
   }
   list(omnibus = do.call(rbind, omnibus), importance = do.call(rbind, importance),
-       pdp = do.call(rbind, pdp))
+       pdp = do.call(rbind, pdp), fold_audit = do.call(rbind, fold_audit))
 }
 
 hte_treated_mechanism <- function(all_pts, pairs, modifiers) {
@@ -583,6 +671,13 @@ hte_probe_crossover <- function(all_pts, pairs) {
   hte_rbind_fill(rows)
 }
 
+hte_horizon_keep <- function(pairs, horizon_h) {
+  suffix <- if (horizon_h == 48) "48h" else if (horizon_h == 168) "7d" else
+    stop("Unsupported frozen horizon: ", horizon_h)
+  !is.na(pairs[[paste0("aki1_", suffix, "_trt")]]) &
+    !is.na(pairs[[paste0("aki1_", suffix, "_ctl")]])
+}
+
 hte_probe_kdigo <- function(all_pts, pairs, modifiers, results) {
   cr <- hte_read(results, "did_cr_all_mimic.csv")
   id <- if ("patientunitstayid" %in% names(cr)) "patientunitstayid" else "stay_id"
@@ -590,6 +685,7 @@ hte_probe_kdigo <- function(all_pts, pairs, modifiers, results) {
   crl <- split(cr[, c("labresult", "offset_h")], cr$pid)
   rows <- list()
   for (h in c(48, 168)) for (threshold in c(.3, 1.0)) {
+    keep <- hte_horizon_keep(pairs, h)
     yt <- yc <- integer(nrow(pairs))
     for (i in seq_len(nrow(pairs))) {
       zt <- crl[[as.character(pairs$trt_pid[i])]]
@@ -600,13 +696,21 @@ hte_probe_kdigo <- function(all_pts, pairs, modifiers, results) {
       yc[i] <- as.integer(nrow(zc) && any(zc$labresult - pairs$baseline_ctl[i] >= threshold))
     }
     definition <- if (threshold == .3) "absolute_delta_ge_0.3" else "fixed_stage2_delta_ge_1.0"
-    est <- pair_or_rd(yt, yc)
-    int <- hte_egfr_interaction(yt, yc, modifiers$egfr)
+    est <- pair_or_rd(yt[keep], yc[keep])
+    int <- hte_egfr_interaction(
+      yt[keep], yc[keep], modifiers$egfr[keep]
+    )
     rows[[length(rows) + 1L]] <- cbind(
-      data.frame(horizon_h = h, definition = definition, component = "effect"), est)
+      data.frame(
+        horizon_h = h, definition = definition, component = "effect",
+        crossover_censor = "frozen_horizon_specific", eligible_pairs = sum(keep)
+      ), est)
     rows[[length(rows) + 1L]] <- cbind(
-      data.frame(horizon_h = h, definition = definition,
-                 component = "egfr_interaction"), int)
+      data.frame(
+        horizon_h = h, definition = definition,
+        component = "egfr_interaction",
+        crossover_censor = "frozen_horizon_specific", eligible_pairs = sum(keep)
+      ), int)
   }
   hte_rbind_fill(rows)
 }
@@ -651,6 +755,7 @@ run_hte_sweep <- function(tag, all_pts, pairs, results) {
     hte_sweep_forest_omnibus_mimic = forest$omnibus,
     hte_sweep_forest_importance_mimic = forest$importance,
     hte_sweep_forest_pdp_mimic = forest$pdp,
+    hte_sweep_forest_fold_audit_mimic = forest$fold_audit,
     hte_sweep_treated_mechanism_mimic =
       hte_treated_mechanism(all_pts, pairs, modifiers),
     hte_probe_never_mimic = hte_probe_never(all_pts, pairs, modifiers),
