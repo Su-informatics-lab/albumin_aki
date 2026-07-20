@@ -33,6 +33,8 @@ def clean_text(value: object) -> str:
 
 def main() -> None:
     args = parse_args()
+    # This file is deliberately an unvalidated candidate used only to locate
+    # cases where volume-times-item-label produces implausible apparent grams.
     dose = pd.read_csv(args.results / "did_albumin_dose_mimic.csv")
     top = dose.nlargest(args.n_courses, "albumin_grams_24h")[["pid"]].copy()
     top["case_id"] = [f"TAIL_{chr(65 + i)}" for i in range(len(top))]
@@ -178,6 +180,23 @@ def main() -> None:
     within_60 = linked.nearest_emar_delta_min.le(60).fillna(False)
     gram_units = linked.dose_given_unit.str.lower().isin(["g", "gm", "gram", "grams"])
     product_ml = linked.product_unit.str.lower().isin(["ml", "milliliter"])
+    input_counts = linked.groupby("case_id").size()
+    pharmacy_counts = pharmacy.groupby("case_id").size()
+    count_mismatch = sum(
+        input_counts.get(case, 0) != pharmacy_counts.get(case, 0)
+        for case in input_counts.index
+    )
+    only_5pct_order_cases = set(
+        pharmacy.groupby("case_id")
+        .filter(lambda z: z.medication.str.contains("Albumin 5%", na=False).all())
+        .case_id
+    )
+    mislabeled_tail_cases = set(
+        linked.loc[
+            (linked.item == "25pct") & (linked.input_amount_ml >= 400),
+            "case_id",
+        ]
+    )
     rows = [
         {
             "probe": "top_tail_inputevents_emar_linkage",
@@ -188,6 +207,11 @@ def main() -> None:
             "fraction_with_emar_within_60min": float(within_60.mean()),
             "events_with_gram_dose_within_60min": int((within_60 & gram_units).sum()),
             "events_with_product_ml_within_60min": int((within_60 & product_ml).sum()),
+            "n_pharmacy_order_rows": len(pharmacy),
+            "courses_input_event_vs_pharmacy_count_mismatch": count_mismatch,
+            "courses_with_25pct_500ml_input_but_only_5pct_orders": len(
+                mislabeled_tail_cases & only_5pct_order_cases
+            ),
             "conclusion": (
                 "exact_grams_recoverable_for_top_tail"
                 if (within_60 & gram_units).sum() == len(linked)

@@ -515,43 +515,6 @@ hte_forest <- function(all_pts, pairs, modifiers, results) {
        pdp = do.call(rbind, pdp), fold_audit = do.call(rbind, fold_audit))
 }
 
-hte_treated_mechanism <- function(all_pts, pairs, modifiers) {
-  tr <- match(pairs$trt_pid, all_pts$pid)
-  product <- factor(all_pts$alb_product[tr],
-                    levels = c("albumin_5pct", "albumin_25pct"))
-  concentration <- ifelse(product == "albumin_5pct", .05,
-                          ifelse(product == "albumin_25pct", .25, NA))
-  dose_g <- all_pts$alb_total_ml_24h[tr] * concentration
-  outcomes <- c("aki1_48h", "aki1_7d", "aki2_48h", "aki2_7d")
-  rows <- list()
-  for (outcome in outcomes) {
-    y <- pairs[[paste0(outcome, "_trt")]]
-    for (spec in c("product_25_vs_5", "dose_per_25g", "product_x_egfr", "dose_x_egfr")) {
-      x <- if (grepl("product", spec)) product else dose_g / 25
-      valid <- !is.na(y) & !is.na(x) & !is.na(modifiers$egfr)
-      dat <- data.frame(y = y[valid], x = x[valid], egfr30 = modifiers$egfr[valid])
-      form <- if (grepl("_x_", spec)) y ~ x * egfr30 else y ~ x
-      for (scale in c("OR", "RD")) {
-        fit <- if (scale == "OR") tryCatch(glm(form, data = dat, family = quasibinomial()),
-                                           error = function(e) NULL) else
-          tryCatch(lm(form, data = dat), error = function(e) NULL)
-        pat <- if (grepl("_x_", spec)) "(x.*:egfr30|egfr30:x)" else "^x"
-        w <- hte_wald(fit, pat)
-        d <- hte_terms(fit, pat, scale)
-        if (!nrow(d)) d <- data.frame(term = NA, estimate = NA, ci_lo = NA,
-                                      ci_hi = NA, p_term = NA)
-        rows[[length(rows) + 1L]] <- cbind(
-          data.frame(outcome = outcome, spec = spec, scale = scale,
-                     n_treated = nrow(dat), events = sum(dat$y), global_p = w["p"],
-                     dose_note = "grams approximated from first product concentration x total 24h mL; mixed-product courses may be misclassified"),
-          d
-        )
-      }
-    }
-  }
-  do.call(rbind, rows)
-}
-
 hte_egfr_interaction <- function(yt, yc, egfr) {
   valid <- !is.na(yt) & !is.na(yc) & !is.na(egfr)
   n <- sum(valid)
@@ -756,8 +719,6 @@ run_hte_sweep <- function(tag, all_pts, pairs, results) {
     hte_sweep_forest_importance_mimic = forest$importance,
     hte_sweep_forest_pdp_mimic = forest$pdp,
     hte_sweep_forest_fold_audit_mimic = forest$fold_audit,
-    hte_sweep_treated_mechanism_mimic =
-      hte_treated_mechanism(all_pts, pairs, modifiers),
     hte_probe_never_mimic = hte_probe_never(all_pts, pairs, modifiers),
     hte_probe_competing_mimic =
       hte_probe_competing(all_pts, pairs, modifiers, results),

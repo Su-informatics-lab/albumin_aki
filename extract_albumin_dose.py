@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build corrected 0-24h albumin grams/volume for salvage analyses.
+"""Build an unvalidated volume-times-item-label candidate for source auditing.
 
-The patient-level output remains on Tempest/Quartz. The aggregate distribution
-and provenance outputs contain no identifiers and are suitable for commit.
-The dose window is [first accepted albumin T0, T0 + 24 hours].
+Do not use this output for dose modeling. The Entry-25 raw-source audit found
+that MIMIC item 220862 can contain 500-mL infusions ordered as 5% albumin, so
+the inputevents item label does not identify the event product concentration.
+The script now requires an explicit probe-only flag to prevent accidental use.
 """
 
 from __future__ import annotations
@@ -24,6 +25,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--results", type=Path, required=True)
     parser.add_argument("--repo", type=Path, required=True)
+    parser.add_argument(
+        "--unvalidated-volume-times-item-label-for-probe-only",
+        action="store_true",
+        help="permit generation only for source-semantic/outlier probes",
+    )
     return parser.parse_args()
 
 
@@ -222,6 +228,12 @@ def extract_iuh(args: argparse.Namespace) -> pd.DataFrame:
 
 def main() -> None:
     args = parse_args()
+    if not args.unvalidated_volume_times_item_label_for_probe_only:
+        raise RuntimeError(
+            "Dose extraction blocked: raw item concentration is not reliable. "
+            "The candidate may be generated only for source auditing with the "
+            "explicit probe-only flag and must not be modeled."
+        )
     args.results.mkdir(parents=True, exist_ok=True)
     dose = extract_mimic(args) if args.database == "mimic" else extract_iuh(args)
     dose.to_csv(args.results / f"did_albumin_dose_{args.database}.csv", index=False)

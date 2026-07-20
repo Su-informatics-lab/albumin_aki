@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe corrected MIMIC dose tails; not part of the primary pipeline.
+"""Probe unvalidated volume-times-item-label tails; never use for modeling.
 
 The top courses are relabeled A, B, ... before printing. No patient or stay
 identifier is written to the aggregate output or stdout.
