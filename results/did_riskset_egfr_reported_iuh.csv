@@ -1,0 +1,4 @@
+"db","database_role","analysis_set","variant","stratum","ps_covariates","treated_eligible","matched","match_rate","caliper","max_smd","n_viol"
+"IUH","external_validation","primary","egfr_reported","G1",22,475,474,0.997894736842105,0.0519191647449315,0.277756146104658,9
+"IUH","external_validation","primary","egfr_reported","G2",22,624,623,0.998397435897436,0.05061155189086,0.197286065458279,7
+"IUH","external_validation","primary","egfr_reported","G3plus",22,277,277,1,0.0498203596552257,0.351961234990211,9

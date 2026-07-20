@@ -2713,3 +2713,179 @@ For the record, stated plainly so no one (including me) reads this file optimist
   and a small unresolved 48h mortality blip.
 
 Prior supervisor summaries led with the MIMIC strength and under-weighted this. This entry is the correction.
+
+---
+
+## Entry 22 — Entry 19 finalized; IUH directional interaction but balance-gate failure  (2026-07-19, Codex)
+
+### Gate status
+
+The two approved Entry 19 integrity repairs are complete, and the frozen IUH
+continuation ran without a PS, caliper, matching, or covariate change. This is
+the requested results-gate STOP.
+
+- Tempest used a clean code checkout at `a3e7196` while reading the frozen
+  patient-level result directory. `tests/test_hte_sweep.R` passed.
+- Quartz job `9720827` used `sbatch`, MICE `m=20`, 1:1 matching with
+  replacement, caliper 0.2, HC1, and the frozen DR-for-SMD>0.1 rule. The static
+  test passed. Both computed- and lab-reported-eGFR stratified models and
+  `03_hte.R` completed.
+- The Slurm job then exited 1 at the deliberately last continuous-eGFR balance
+  guard (elapsed 1:11; peak RSS 416,560 K). This is a guard stop after the
+  requested models, not a compute failure.
+- Only aggregate CSVs were returned. Patient-level `did_all`, lab/Cr streams,
+  and all `*pairs*` remain on Tempest/Quartz.
+
+### Final Entry 19 integrity repairs and interpretation
+
+**P-F frozen censor.** P-F now uses exactly 4,690 pairs at 48h and 4,202 at
+7d. The alternative absolute-delta definition (`SCr increase >=0.3`) remained
+harmful: OR 1.613 and RD +9.96 pp at 48h; OR 1.546 and RD +10.23 pp at 7d.
+Its eGFR interaction was concordant on both scales: OR per +30 eGFR
+0.407/0.411 and RD interaction -19.81/-20.68 pp at 48h/7d. The fixed
+stage-2 delta (`>=1.0`) gave OR 1.705 and RD +1.92 pp at 48h, and OR 1.730
+and RD +3.02 pp at 7d; its eGFR interactions were OR 0.204/0.236 and RD
+-8.42/-11.69 pp. Thus the renal-reserve gradient does not depend on the
+relative KDIGO threshold; the original stage>=2 non-monotonicity is compatible
+with sparse events/definition behavior rather than a reproducible second
+modifier.
+
+**Patient-disjoint forest.** The matching graph had 2,031 connected
+components; the largest contained 120 pairs (2.21%). Honest five-fold
+cross-fitting was therefore feasible. Fold sizes were 975/913/900/948/954 at
+48h and 830/797/855/878/842 at 7d, with zero patient overlap. Calibration
+slopes were 0.968 (95% CI 0.872-1.064; P=4.18e-84) and 0.977
+(0.876-1.077; P=1.35e-77). eGFR ranked first, age second, baseline SCr third,
+and hemoglobin fourth at both horizons. The eGFR PDP decreased strongly
+through approximately 98 mL/min/1.73m2, with a small high-eGFR upturn. The
+forest remains exploratory despite honest cross-fitting.
+
+**Final Entry 19 read.** The complete, unfiltered Step-1/Step-2 tables are now
+committed. Many modifiers pass FDR because they encode correlated
+reserve/severity. The competing models remain decisive: `alb_cat` does not
+alter the eGFR axis, while baseline SCr is collinear with eGFR but does not
+absorb its interaction. P-A/P-B preserve the eGFR gradient; P-C localizes the
+mortality anomaly to crossover-selected groups. The parsimonious
+hypothesis-generating conclusion is one renal-reserve axis, not an independent
+eGFR-by-albumin phenotype and not evidence that computed eGFR is merely an
+artifact of baseline SCr.
+
+### IUH matching and balance
+
+Match rate did not collapse:
+
+| eGFR definition | G1 matched | G2 matched | G3+ matched |
+|---|---:|---:|---:|
+| Computed | 529/529 (100.0%) | 593/595 (99.7%) | 253/253 (100.0%) |
+| IUH lab reported | 474/475 (99.8%) | 623/624 (99.8%) | 277/277 (100.0%) |
+
+However, the stratified models did **not** pass balance:
+
+| eGFR definition | Stratum | Max PS-covariate SMD | Violations | Continuous eGFR SMD |
+|---|---|---:|---:|---:|
+| Computed | G1 | 0.295 | 7 | **0.122** |
+| Computed | G2 | 0.194 | 8 | 0.022 |
+| Computed | G3+ | 0.387 | 9 | **0.132** |
+| Lab reported | G1 | 0.278 | 9 | 0.000 |
+| Lab reported | G2 | 0.197 | 7 | **0.103** |
+| Lab reported | G3+ | 0.352 | 9 | **0.186** |
+
+The computed-eGFR G1 and G3+ groups and the reported-eGFR G2 and G3+ groups
+remain above the 0.10 continuous-eGFR threshold. Other important residual
+imbalances include albumin category/heart rate/age in G1 and
+lactate/ventilation/diabetes in G3+. Categorizing and matching within broad
+G1/G2/G3+ bands therefore did not guarantee continuous renal-reserve or
+overall covariate balance. No corrective rematch was attempted.
+
+### IUH renal outcomes
+
+Cells below are `PSM OR / RD percentage points ; DR OR / RD percentage
+points`. Exact 95% CIs and P values are in the committed tidy CSVs. Sparse
+cells with fewer than 20 events in either arm are marked `†` and are not
+interpreted.
+
+**Frozen computed-eGFR strata**
+
+| Outcome | G1 | G2 | G3+ |
+|---|---:|---:|---:|
+| KDIGO>=1, 48h | 2.31 / +8.2; 2.28 / +8.1 | 1.28 / +3.8; 1.47 / +5.2 | 1.47 / +9.4; 1.49 / +9.2 |
+| KDIGO>=2, 48h | 1.47 / +1.0; 1.42 / +1.0 `†` | 2.03 / +1.6; 2.94 / +1.9 `†` | 3.16 / +5.0; 2.82 / +4.4 `†` |
+| KDIGO>=3, 48h | 1.50 / +0.2; 2.18 / +0.3 `†` | NA / NA; NA / NA `†` | 1.62 / +1.5; 1.65 / +0.4 `†` |
+| Stage>=2 or RRT, 48h | 1.06 / +0.2; 1.08 / -0.1 `†` | 1.37 / +0.9; 1.87 / +1.2 `†` | 1.17 / +1.5; 0.87 / -1.6 |
+| KDIGO>=1, 7d | 1.34 / +4.1; 1.37 / +4.2 | 1.31 / +4.8; 1.46 / +6.3 | 1.49 / +9.8; 1.76 / +13.1 |
+| KDIGO>=2, 7d | 1.37 / +1.5; 1.38 / +1.5 `†` | 0.93 / -0.4; 1.11 / +0.2 | 3.65 / +10.4; 4.09 / +11.4 `†` |
+| KDIGO>=3, 7d | 2.01 / +0.5; 3.09 / +0.6 `†` | 0.61 / -1.0; 0.80 / -0.6 `†` | 8.12 / +7.5; 7.83 / +7.6 `†` |
+| Stage>=2 or RRT, 7d | 1.05 / +0.3; 1.07 / -0.1 | 0.81 / -1.2; 0.97 / -0.6 | 2.08 / +8.7; 1.98 / +7.7 `†` |
+
+**Pre-registered IUH-lab-reported-eGFR sensitivity**
+
+| Outcome | G1 | G2 | G3+ |
+|---|---:|---:|---:|
+| KDIGO>=1, 48h | 1.96 / +6.3; 2.01 / +6.4 | 1.19 / +2.7; 1.47 / +5.3 | 1.18 / +4.1; 1.18 / +4.0 |
+| KDIGO>=2, 48h | 2.20 / +1.6; 2.66 / +1.9 `†` | 1.42 / +1.1; 1.78 / +1.8 `†` | 0.79 / -1.4; 0.75 / -2.1 `†` |
+| KDIGO>=3, 48h | NA / NA; NA / NA `†` | NA / NA; NA / NA `†` | 0.59 / -1.8; 1.15 / -1.6 `†` |
+| Stage>=2 or RRT, 48h | 1.41 / +0.9; 1.43 / +1.0 `†` | 0.78 / -1.1; 1.13 / +0.1 | 0.60 / -5.0; 0.56 / -5.7 `†` |
+| KDIGO>=1, 7d | 1.22 / +2.6; 1.39 / +3.8 | 1.24 / +3.7; 1.44 / +5.6 | 1.41 / +8.4; 1.43 / +8.5 |
+| KDIGO>=2, 7d | 1.07 / +0.3; 1.12 / +0.7 `†` | 0.89 / -0.6; 1.00 / +0.2 | 2.13 / +5.6; 1.74 / +3.7 `†` |
+| KDIGO>=3, 7d | NA / NA; NA / NA `†` | 0.77 / -0.4; 0.78 / -0.2 `†` | 3.14 / +4.5; 3.17 / +4.3 `†` |
+| Stage>=2 or RRT, 7d | 0.83 / -0.9; 0.89 / -0.4 `†` | 0.60 / -3.3; 0.68 / -2.2 | 1.55 / +4.5; 1.35 / +2.9 `†` |
+
+The old, imbalanced pooled IUH estimates remain a limitation, not the
+replication target. For transparency, pooled KDIGO>=1 was PSM OR/RD
+0.97/-0.65 pp at 48h and 0.97/-0.65 pp at 7d; DR was 1.21/+2.52 pp and
+1.14/+1.97 pp. The full pooled and stratified PSM/DR outcome tables, including
+CIs and P values, are committed.
+
+### Formal eGFR interaction and mortality falsification
+
+The formal interaction uses the frozen pooled matched pairs and HC1; no
+separate DR interaction estimand was pre-specified. PSM and DR are both shown
+above for all outcome contrasts.
+
+- KDIGO>=1 interaction per +30 eGFR: OR 0.533 (95% CI 0.409-0.694,
+  P=3.01e-06) and RD -10.68 pp (95% CI -15.22 to -6.13,
+  P=4.43e-06) at 48h; OR 0.552 (0.420-0.727, P=2.32e-05) and RD
+  -11.15 pp (-16.35 to -5.96, P=2.65e-05) at 7d.
+- KDIGO>=2 interactions were flat: OR 0.831/0.887 and RD
+  -0.64/-0.76 pp at 48h/7d (all P>.52). KDIGO>=3 interactions were
+  directionally strong but sparse and are not interpreted.
+
+Thus the primary continuous interaction is directionally concordant with
+MIMIC: albumin-associated harm increases as renal reserve falls. The strong
+computed-versus-reported measurement concordance argues against a gross
+formula artifact, but the reported-eGFR within-stratum outcome sensitivity is
+mixed and is not monotone at 48h. Moreover, the formal interaction inherits
+the pooled match's eGFR SMD 0.247. The signal is there, but the frozen IUH
+design has not delivered a balance-qualified replication.
+
+Fixed-window pooled mortality remained mostly null on the prespecified RD
+scale. PSM/DR RDs were -0.22/+0.07 pp at 48h and +0.44/+0.91 pp at 7d for
+all controls; -0.78/-0.76 pp and 0.00/+0.07 pp for never-treated controls;
+and -0.44/-0.15 pp and +0.20/+0.50 pp after crossover censoring. Events were
+sparse. The 7d all-control DR OR was 1.93 (95% CI 1.04-3.58), whereas its RD
+CI crossed zero and the never-treated/censored contrasts were null. This is
+another crossover/selection warning, not a clean positive falsification.
+Whole-stay mortality remains descriptive only.
+
+### Honest replication verdict
+
+IUH provides a **directionally supportive continuous eGFR interaction**, but
+external replication is **not established at this gate**. The required
+within-stratum continuous-eGFR check failed in four of six strata, overall
+covariate balance remained poor, the computed-eGFR stratum pattern was clear
+at 7d but not monotone at 48h, and the independent lab-reported sensitivity
+was mixed. Per Entry 21b, IUH is therefore downgraded rather than rescued:
+the renal-reserve gradient is strong and internally robust in MIMIC,
+directionally present but methodologically inconclusive in IUH, and remains
+hypothesis-generating pending a separately approved validation design.
+
+### Aggregate artifacts
+
+Committed result families include the complete MIMIC
+`hte_sweep_step1_*`, `hte_sweep_step2_*`, forest, treated-mechanism, and
+`hte_probe_*` tables; and IUH `did_riskset_egfr*`,
+`psm_balance_egfr*`, `did_binary_egfr*`, `did_hte*`,
+`iuh_stratified_egfr_balance.csv`, and
+`iuh_stratified_sparse_cells.csv`. No pair file or spot-check file is staged.
+
+>>> RESULTS-GATE STOP. Do not alter or rescue the frozen estimator; supervisor review is required before any additional IUH analysis. <<<

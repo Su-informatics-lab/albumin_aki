@@ -20,6 +20,7 @@ results/did_binary_pairs_*.csv
 !results/iuh_source_albumin_*.csv
 !results/iuh_egfr_*.csv
 !results/iuh_balance_probe.csv
+!results/iuh_stratified_*.csv
 logs/
 *.csv.gz
 __pycache__/
