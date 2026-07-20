@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Formal treatment-by-eGFR interaction and prespecified subgroups.
 # Uses the pooled canonical pairs and shared outcome/OR implementation.
-# Usage: Rscript 03_hte.R {mimic|eicu} [standard|sweep]
+# Usage: Rscript 03_hte.R {mimic|eicu|iuh} [standard|sweep]
 
 suppressPackageStartupMessages({
   library(sandwich)
@@ -10,9 +10,9 @@ suppressPackageStartupMessages({
 
 args <- commandArgs(trailingOnly = TRUE)
 if (!(length(args) %in% c(1, 2)) ||
-    !(tolower(args[1]) %in% c("mimic", "eicu")) ||
+    !(tolower(args[1]) %in% c("mimic", "eicu", "iuh")) ||
     (length(args) == 2 && !(tolower(args[2]) %in% c("standard", "sweep")))) {
-  stop("Usage: Rscript 03_hte.R {mimic|eicu} [standard|sweep]")
+  stop("Usage: Rscript 03_hte.R {mimic|eicu|iuh} [standard|sweep]")
 }
 tag <- tolower(args[1])
 mode <- if (length(args) == 2) tolower(args[2]) else "standard"
@@ -25,7 +25,9 @@ file_arg <- sub("^--file=", "", file_arg[1])
 script_dir <- dirname(normalizePath(file_arg))
 source(file.path(script_dir, "R", "causal_helpers.R"))
 source(file.path(script_dir, "R", "covariate_registry.R"))
-RESULTS <- path.expand("~/albumin_aki/results")
+RESULTS <- path.expand(Sys.getenv(
+  "ALBUMIN_AKI_RESULTS", unset = "~/albumin_aki/results"
+))
 
 all_pts <- read.csv(
   file.path(RESULTS, sprintf("did_all_%s.csv", tag)),

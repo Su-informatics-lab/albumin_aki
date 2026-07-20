@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # Canonical frozen risk-set PSM for albumin and cardiac-surgery AKI.
-# Usage: Rscript 02_psm.R {mimic|eicu} {pooled|egfr} [primary|s2_no_aortic]
+# Usage: Rscript 02_psm.R {mimic|eicu|iuh} {pooled|egfr|egfr_reported}
 
 suppressPackageStartupMessages({
   library(sandwich)
@@ -8,7 +8,9 @@ suppressPackageStartupMessages({
   library(mice)
 })
 
-RESULTS <- path.expand("~/albumin_aki/results")
+RESULTS <- path.expand(Sys.getenv(
+  "ALBUMIN_AKI_RESULTS", unset = "~/albumin_aki/results"
+))
 M_IMP <- 20
 CALIPER_SD <- 0.2
 PRIMARY_H <- 24
@@ -16,12 +18,13 @@ SEED <- 2026
 
 args <- commandArgs(trailingOnly = TRUE)
 if (!(length(args) %in% c(2, 3)) ||
-    !(tolower(args[1]) %in% c("mimic", "eicu")) ||
-    !(tolower(args[2]) %in% c("pooled", "egfr")) ||
+    !(tolower(args[1]) %in% c("mimic", "eicu", "iuh")) ||
+    !(tolower(args[2]) %in% c("pooled", "egfr", "egfr_reported")) ||
     (length(args) == 3 &&
        !(tolower(args[3]) %in% c("primary", "s2_no_aortic")))) {
   stop(
-    "Usage: Rscript 02_psm.R {mimic|eicu} {pooled|egfr} ",
+    "Usage: Rscript 02_psm.R {mimic|eicu|iuh} ",
+    "{pooled|egfr|egfr_reported} ",
     "[primary|s2_no_aortic]"
   )
 }
@@ -31,6 +34,9 @@ variant <- tolower(args[2])
 analysis_set <- if (length(args) == 3) tolower(args[3]) else "primary"
 if (analysis_set != "primary" && (tag != "mimic" || variant != "pooled")) {
   stop("The frozen S2-without-aortic sensitivity is MIMIC pooled only")
+}
+if (variant == "egfr_reported" && tag != "iuh") {
+  stop("Lab-reported eGFR sensitivity is IUH only")
 }
 file_arg <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 file_arg <- sub("^--file=", "", file_arg[1])
@@ -74,10 +80,10 @@ build_main_covariates <- function(all_pts, labs, tag) {
     surg$surg_aortic[match(all_pts$pid, surg$pid)]
   )
   all_pts$surg_aortic[is.na(all_pts$surg_aortic)] <- 0L
-  if (tag == "mimic") {
-    vent <- safe_read("strm_vent_mimic.csv")
-    vaso <- safe_read("strm_vaso_mimic.csv")
-    map_stream <- safe_read("strm_map_mimic.csv")
+  if (tag %in% c("mimic", "iuh")) {
+    vent <- safe_read(sprintf("strm_vent_%s.csv", tag))
+    vaso <- safe_read(sprintf("strm_vaso_%s.csv", tag))
+    map_stream <- safe_read(sprintf("strm_map_%s.csv", tag))
     all_pts$vent_at_t0 <- state_at_index(vent, index)[as.character(all_pts$pid)]
     all_pts$vaso_at_t0 <- state_at_index(vaso, index)[as.character(all_pts$pid)]
     map_values <- last_value_before_index(
@@ -220,7 +226,15 @@ labs$pid <- labs[[lab_id]]
 cr_all <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
 cr_list <- split(cr_all[, c("labresult", "offset_h")], cr_all$pid)
 all_pts <- build_main_covariates(all_pts, labs, tag)
-all_pts$egfr_stratum <- egfr_stratum(all_pts$egfr)
+modifier_egfr <- if (variant == "egfr_reported") {
+  if (!("egfr_reported" %in% names(all_pts))) {
+    stop("IUH reported-eGFR sensitivity requires egfr_reported")
+  }
+  all_pts$egfr_reported
+} else {
+  all_pts$egfr
+}
+all_pts$egfr_stratum <- egfr_stratum(modifier_egfr)
 ps_spec <- main_ps_vars(tag, variant, analysis_set)
 cat(sprintf(
   "  frozen PS set: %s; db-specific variables (%d): %s\n",
@@ -248,7 +262,8 @@ treated_ok <- treated_all[
 cat(sprintf("  treated eligible after pair-time prevalent screen: %d/%d\n",
             length(treated_ok), length(treated_all)))
 
-strata_to_run <- if (variant == "pooled") "Overall" else levels(all_pts$egfr_stratum)
+strata_to_run <- if (variant == "pooled") "Overall" else
+  levels(all_pts$egfr_stratum)
 all_match <- list()
 all_balance <- list()
 all_binary <- list()
@@ -330,7 +345,8 @@ for (stratum in strata_to_run) {
   }, numeric(1))
   balance <- data.frame(
     db = db,
-    database_role = if (tag == "mimic") "primary" else "supplementary",
+    database_role = if (tag == "mimic") "primary" else
+      if (tag == "iuh") "external_validation" else "supplementary",
     analysis_set = analysis_set,
     variant = variant,
     stratum = stratum,
@@ -369,7 +385,8 @@ for (stratum in strata_to_run) {
       binary[[length(binary) + 1L]] <- cbind(
         data.frame(
           db = db,
-          database_role = if (tag == "mimic") "primary" else "supplementary",
+          database_role = if (tag == "mimic") "primary" else
+            if (tag == "iuh") "external_validation" else "supplementary",
           analysis_set = analysis_set,
           variant = variant,
           stratum = stratum,
@@ -383,7 +400,8 @@ for (stratum in strata_to_run) {
   binary <- do.call(rbind, binary)
   all_match[[length(all_match) + 1L]] <- data.frame(
     db = db,
-    database_role = if (tag == "mimic") "primary" else "supplementary",
+    database_role = if (tag == "mimic") "primary" else
+      if (tag == "iuh") "external_validation" else "supplementary",
     analysis_set = analysis_set,
     variant = variant,
     stratum = stratum,

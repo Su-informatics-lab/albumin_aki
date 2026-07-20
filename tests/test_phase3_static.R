@@ -74,6 +74,12 @@ stopifnot(
          main_ps_vars("eicu", "pooled")),
   !any(c("egfr", "ckd") %in% main_ps_vars("eicu", "egfr")),
   identical(
+    main_ps_vars("iuh", "pooled"),
+    c(COVARIATE_SETS$S2, "surg_aortic")
+  ),
+  !any(c("egfr", "ckd") %in%
+         main_ps_vars("iuh", "egfr_reported")),
+  identical(
     main_ps_vars("mimic", "pooled", "s2_no_aortic"),
     COVARIATE_SETS$S2
   ),

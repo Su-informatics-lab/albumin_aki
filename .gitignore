@@ -17,6 +17,8 @@ results/did_binary_pairs_*.csv
 !results/probe_eicu_underadjustment.csv
 !results/hte_sweep_*.csv
 !results/hte_probe_*.csv
+!results/iuh_source_albumin_*.csv
+!results/iuh_egfr_*.csv
 logs/
 *.csv.gz
 __pycache__/

@@ -47,24 +47,28 @@ main_ps_vars <- function(db, variant, analysis_set = "primary") {
   db <- tolower(db)
   variant <- tolower(variant)
   analysis_set <- tolower(analysis_set)
-  if (!(db %in% c("mimic", "eicu"))) stop("Unknown database: ", db)
-  if (!(variant %in% c("pooled", "egfr"))) stop("Unknown variant: ", variant)
+  if (!(db %in% c("mimic", "eicu", "iuh"))) stop("Unknown database: ", db)
+  if (!(variant %in% c("pooled", "egfr", "egfr_reported"))) {
+    stop("Unknown variant: ", variant)
+  }
   if (!(analysis_set %in% c("primary", "s2_no_aortic"))) {
     stop("Unknown analysis set: ", analysis_set)
   }
   # v3.3: MIMIC primary is S2 + aortic. eICU is supplementary and omits
   # vaso/MAP (informative missingness) and the post-T0-contaminated APACHE
   # day-1 ventilation proxy.
-  vars <- if (db == "mimic" && analysis_set == "primary") {
+  vars <- if (db %in% c("mimic", "iuh") && analysis_set == "primary") {
     c(COVARIATE_SETS$S2, "surg_aortic")
-  } else if (db == "mimic") {
+  } else if (db %in% c("mimic", "iuh")) {
     COVARIATE_SETS$S2
   } else if (analysis_set == "primary") {
     c(PS_BASE, "surg_aortic")
   } else {
     PS_BASE
   }
-  if (variant == "egfr") vars <- setdiff(vars, c("egfr", "ckd"))
+  if (variant %in% c("egfr", "egfr_reported")) {
+    vars <- setdiff(vars, c("egfr", "ckd"))
+  }
   vars
 }
 
