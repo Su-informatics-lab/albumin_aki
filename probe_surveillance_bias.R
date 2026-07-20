@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# Read-only Entry-27 surveillance/ascertainment probe on frozen pooled pairs.
+# Read-only Entry-27/29 surveillance/ascertainment probe on frozen pooled pairs.
 # No propensity model is fit and no matching is performed.
 # Usage: Rscript probe_surveillance_bias.R {mimic|eicu|iuh}
 
@@ -128,6 +128,69 @@ daily_peak_cr <- function(cr_pt, t0) {
   do.call(rbind, rows)
 }
 
+collapse_timestamp_ties <- function(x) {
+  if (!nrow(x)) return(x)
+  x <- x[order(x$offset_h, -x$labresult), , drop = FALSE]
+  x[!duplicated(x$offset_h), c("labresult", "offset_h"), drop = FALSE]
+}
+
+# Entry 29 genuinely limits surveillance to one predesignated draw per
+# T0-anchored day. The closest-anchor draw is chosen within its corresponding
+# day, so the same draw cannot be reused at adjacent anchors. Exact-time ties
+# retain the frozen max-Cr rule; equal anchor distances retain the earlier time.
+scheduled_daily_cr <- function(cr_pt, t0, rule) {
+  stopifnot(rule %in% c("closest_anchor", "first_of_day"))
+  x <- collapse_timestamp_ties(post_cr(cr_pt, t0, 168))
+  if (!nrow(x)) return(x)
+  x$day <- pmin(7L, floor((x$offset_h - t0 - 1e-10) / 24) + 1L)
+  rows <- lapply(split(x, x$day), function(z) {
+    z <- z[order(z$offset_h), , drop = FALSE]
+    if (rule == "first_of_day") {
+      return(z[1, c("labresult", "offset_h"), drop = FALSE])
+    }
+    anchor <- t0 + 24 * z$day[1]
+    distance <- abs(z$offset_h - anchor)
+    z[order(distance, z$offset_h)[1], c("labresult", "offset_h"), drop = FALSE]
+  })
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out
+}
+
+measurement_hits <- function(cr_selected, baseline, t0, outcome) {
+  horizon <- if (grepl("48h", outcome)) 48 else 168
+  x <- post_cr(cr_selected, t0, horizon)
+  if (!nrow(x) || is.na(baseline) || baseline <= 0) {
+    return(list(x = x, hit = logical(nrow(x))))
+  }
+  x <- collapse_timestamp_ties(x)
+  rel_h <- x$offset_h - t0
+  delta <- x$labresult - baseline
+  ratio <- x$labresult / baseline
+  if (grepl("^aki1_", outcome)) {
+    hit <- (delta >= 0.3 & rel_h <= 48) | ratio >= 1.5
+  } else if (grepl("^aki2_", outcome)) {
+    hit <- ratio >= 2
+  } else {
+    stop("Unsupported transient-blip outcome: ", outcome)
+  }
+  list(x = x, hit = hit)
+}
+
+# A flag is a confirmed isolated transient when exactly one selected value
+# crosses the outcome threshold and it is followed by a selected value below
+# threshold. The preceding comparison is the prior selected draw, or the
+# unchanged baseline for the first post-T0 draw.
+isolated_blip <- function(cr_selected, baseline, t0, outcome) {
+  z <- measurement_hits(cr_selected, baseline, t0, outcome)
+  if (sum(z$hit) != 1L) return(0L)
+  j <- which(z$hit)
+  if (j >= length(z$hit)) return(0L)
+  left_below <- if (j == 1L) TRUE else !z$hit[j - 1L]
+  right_below <- !z$hit[j + 1L]
+  as.integer(left_below && right_below)
+}
+
 summarize_counts <- function(x) {
   data.frame(
     n = sum(!is.na(x)),
@@ -138,10 +201,13 @@ summarize_counts <- function(x) {
   )
 }
 
-estimate_outcomes <- function(pairs, outcomes, counts, all_pts, violations) {
+estimate_outcomes <- function(pairs, outcomes, counts, all_pts, violations,
+                              schemes = c(
+                                "native", "daily_peak", "both_members_ge3_cr"
+                              )) {
   rows <- list()
   methods <- c("psm", if (length(violations)) "dr")
-  for (scheme in c("native", "daily_peak", "both_members_ge3_cr")) {
+  for (scheme in schemes) {
     for (outcome in OUTCOMES) {
       y_t <- outcomes[[paste0(scheme, "_", outcome, "_trt")]]
       y_c <- outcomes[[paste0(scheme, "_", outcome, "_ctl")]]
@@ -203,6 +269,25 @@ daily <- setNames(
   replicate(length(OUTCOMES) * 2, integer(n_pairs), simplify = FALSE),
   as.vector(outer(OUTCOMES, c("_trt", "_ctl"), paste0))
 )
+LIMITED_SCHEMES <- c("closest_anchor", "first_of_day")
+limited_names <- as.vector(outer(
+  as.vector(outer(LIMITED_SCHEMES, OUTCOMES, paste, sep = "_")),
+  c("_trt", "_ctl"), paste0
+))
+limited <- setNames(
+  replicate(length(limited_names), integer(n_pairs), simplify = FALSE),
+  limited_names
+)
+blip <- setNames(
+  replicate(
+    length(c("native", LIMITED_SCHEMES)) * length(OUTCOMES) * 2,
+    integer(n_pairs), simplify = FALSE
+  ),
+  as.vector(outer(
+    as.vector(outer(c("native", LIMITED_SCHEMES), OUTCOMES, paste, sep = "_")),
+    c("_trt", "_ctl"), paste0
+  ))
+)
 
 for (i in seq_len(n_pairs)) {
   t0 <- pairs$t0[i]
@@ -220,12 +305,46 @@ for (i in seq_len(n_pairs)) {
   oc <- scr_kdigo_outcomes(
     daily_peak_cr(c_cr, t0), pairs$baseline_ctl[i], t0
   )
+  selected_t <- list(
+    native = post_cr(t_cr, t0, 168),
+    closest_anchor = scheduled_daily_cr(t_cr, t0, "closest_anchor"),
+    first_of_day = scheduled_daily_cr(t_cr, t0, "first_of_day")
+  )
+  selected_c <- list(
+    native = post_cr(c_cr, t0, 168),
+    closest_anchor = scheduled_daily_cr(c_cr, t0, "closest_anchor"),
+    first_of_day = scheduled_daily_cr(c_cr, t0, "first_of_day")
+  )
+  limited_t <- lapply(
+    selected_t[LIMITED_SCHEMES], scr_kdigo_outcomes,
+    baseline = pairs$baseline_trt[i], t0_h = t0
+  )
+  limited_c <- lapply(
+    selected_c[LIMITED_SCHEMES], scr_kdigo_outcomes,
+    baseline = pairs$baseline_ctl[i], t0_h = t0
+  )
   for (outcome in OUTCOMES) {
     # Preserve the frozen horizon-specific crossover censor.
     native_t <- pairs[[paste0(outcome, "_trt")]][i]
     native_c <- pairs[[paste0(outcome, "_ctl")]][i]
     daily[[paste0(outcome, "_trt")]][i] <- if (is.na(native_t)) NA else ot[outcome]
     daily[[paste0(outcome, "_ctl")]][i] <- if (is.na(native_c)) NA else oc[outcome]
+    for (scheme in LIMITED_SCHEMES) {
+      limited[[paste0(scheme, "_", outcome, "_trt")]][i] <-
+        if (is.na(native_t)) NA else limited_t[[scheme]][outcome]
+      limited[[paste0(scheme, "_", outcome, "_ctl")]][i] <-
+        if (is.na(native_c)) NA else limited_c[[scheme]][outcome]
+    }
+    for (scheme in c("native", LIMITED_SCHEMES)) {
+      blip[[paste0(scheme, "_", outcome, "_trt")]][i] <-
+        if (is.na(native_t)) NA else isolated_blip(
+          selected_t[[scheme]], pairs$baseline_trt[i], t0, outcome
+        )
+      blip[[paste0(scheme, "_", outcome, "_ctl")]][i] <-
+        if (is.na(native_c)) NA else isolated_blip(
+          selected_c[[scheme]], pairs$baseline_ctl[i], t0, outcome
+        )
+    }
   }
 }
 counts <- list(
@@ -277,6 +396,48 @@ comparison <- estimate_outcomes(
   pairs, outcome_vectors, counts, all_pts, violations
 )
 
+# Entry-29 scheduled single-draw-per-day comparison, on the same pairs and
+# using the same frozen DR trigger/covariates.
+limited_outcome_vectors <- list()
+for (outcome in OUTCOMES) {
+  limited_outcome_vectors[[paste0("native_", outcome, "_trt")]] <-
+    pairs[[paste0(outcome, "_trt")]]
+  limited_outcome_vectors[[paste0("native_", outcome, "_ctl")]] <-
+    pairs[[paste0(outcome, "_ctl")]]
+  for (scheme in LIMITED_SCHEMES) {
+    limited_outcome_vectors[[paste0(scheme, "_", outcome, "_trt")]] <-
+      limited[[paste0(scheme, "_", outcome, "_trt")]]
+    limited_outcome_vectors[[paste0(scheme, "_", outcome, "_ctl")]] <-
+      limited[[paste0(scheme, "_", outcome, "_ctl")]]
+  }
+}
+limited_comparison <- estimate_outcomes(
+  pairs, limited_outcome_vectors, counts, all_pts, violations,
+  schemes = c("native", LIMITED_SCHEMES)
+)
+
+blip_rows <- list()
+for (scheme in c("native", LIMITED_SCHEMES)) {
+  for (outcome in OUTCOMES) {
+    for (arm in c("trt", "ctl")) {
+      flags <- limited_outcome_vectors[[paste0(scheme, "_", outcome, "_", arm)]]
+      isolated <- blip[[paste0(scheme, "_", outcome, "_", arm)]]
+      valid <- !is.na(flags)
+      n_flags <- sum(flags[valid] == 1L)
+      n_isolated <- sum(isolated[valid] == 1L & flags[valid] == 1L)
+      blip_rows[[length(blip_rows) + 1L]] <- data.frame(
+        db = db, sampling_scheme = scheme, outcome = outcome,
+        arm = if (arm == "trt") "treated" else "control",
+        n_evaluable = sum(valid), n_aki_flags = n_flags,
+        n_isolated_blips = n_isolated,
+        isolated_blip_fraction = if (n_flags) n_isolated / n_flags else NA_real_,
+        sparse_lt20 = n_flags < 20
+      )
+    }
+  }
+}
+limited_blip <- do.call(rbind, blip_rows)
+
 # Hard integrity gates: daily peaks must preserve peak-any outcomes, and the
 # reconstructed frozen DR adjustment must reproduce canonical native results.
 daily_identity <- all(vapply(OUTCOMES, function(outcome) {
@@ -325,6 +486,30 @@ for (outcome in OUTCOMES) {
 }
 reconciliation <- do.call(rbind, reconcile_rows)
 if (!all(reconciliation$pass)) stop("Frozen native estimate reconciliation failed")
+
+limited_native <- limited_comparison[
+  limited_comparison$sampling_scheme == "native",
+]
+comparison_native <- comparison[comparison$sampling_scheme == "native",]
+limited_native <- limited_native[
+  order(limited_native$outcome, limited_native$method),
+]
+comparison_native <- comparison_native[
+  order(comparison_native$outcome, comparison_native$method),
+]
+numeric_estimates <- c(
+  "events_trt", "events_ctl", "n", "rate_trt", "rate_ctl", "or",
+  "or_ci_lo", "or_ci_hi", "or_p", "rd", "rd_ci_lo", "rd_ci_hi", "rd_p"
+)
+if (
+  nrow(limited_native) != nrow(comparison_native) ||
+    max(abs(
+      as.matrix(limited_native[numeric_estimates]) -
+        as.matrix(comparison_native[numeric_estimates])
+    ), na.rm = TRUE) > 1e-12
+) {
+  stop("Entry-29 native estimate reconciliation failed")
+}
 
 # Missing-post-T0 rates (all three DBs) and dropped-instead-of-zero sensitivity.
 nopost_rows <- list()
@@ -501,6 +686,16 @@ write.csv(
   file.path(RESULTS, sprintf("surveillance_integrity_%s.csv", tag)),
   row.names = FALSE
 )
+write.csv(
+  limited_comparison,
+  file.path(RESULTS, sprintf("surveillance_limited_aki_%s.csv", tag)),
+  row.names = FALSE
+)
+write.csv(
+  limited_blip,
+  file.path(RESULTS, sprintf("surveillance_limited_blip_%s.csv", tag)),
+  row.names = FALSE
+)
 if (nrow(missing_drop)) {
   write.csv(
     missing_drop,
@@ -519,7 +714,10 @@ if (nrow(mortality)) {
 cat(sprintf(
   paste0(
     "probe_surveillance_bias.R | %s | COMPLETE | frozen pairs=%d | ",
-    "daily-peak identity=%s | DR reconciliation=PASS\n"
+    paste0(
+      "daily-peak identity=%s | DR reconciliation=PASS | ",
+      "scheduled-draw native reconciliation=PASS\n"
+    )
   ),
   db, n_pairs, daily_identity
 ))
