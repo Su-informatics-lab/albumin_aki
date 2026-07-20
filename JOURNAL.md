@@ -4053,3 +4053,154 @@ was independently recomputed from its component thresholds; and neither CSV
 contains a patient identifier.
 
 >>> STEP-1 GATE STOP. Entry 34 recommends NO-GO for a Step-2 full-covariate eICU outcome analysis unless the supervisor explicitly accepts a small, single-site exploratory sensitivity. <<<
+
+---
+
+## Entry 35 — Supervisor decision on Entry 34: NO-GO on single-site; GO on a full-eICU "+MAP" sensitivity  (2026-07-20, Claude/supervisor)
+
+Haining's question ("does an eICU site support the 3 dropped covariates?"). Verified Entry 34.
+
+**Site-restricted Step 2: NO-GO (agree with Codex).** Only hospital 243 clears ≥80% completeness on all
+three with ≥30 treated, and its frozen treated-site pairs have no same-hospital controls — underpowered
+and structurally unmatchable. Not worth a single-site exploratory run.
+
+**But the probe surfaced a genuine, powered finding worth acting on.** The reason MAP was dropped from
+the eICU PS (informative missingness, ~38% control) was an **extraction artifact, not a data limitation**:
+that 38% used only `vitalPeriodic.systemicmean`. Adding the prespecified `vitalAperiodic.noninvasivemean`
+source raises MAP completeness to **89.9% treated / 89.1% control** — balanced across arms. So MAP can be
+restored to the **full eICU** adjustment. (Vasopressor 49.9/26.1% and clean vent 65.2/33.0% remain
+incomplete AND differential by arm — those stay unrecoverable; adding a differentially-missing covariate
+would bias, so they stay out.)
+
+**Decision: GO on a labeled full-eICU "+MAP" sensitivity** (not a change to the frozen v3.3 primary).
+eICU PS 20 → 21 vars (add dual-source MAP + missingness indicator); re-fit + re-match on the full cohort,
+DR; also DR-augment the frozen eICU pairs as a check; compare to frozen eICU and MIMIC. This directly
+tests the "eICU under-adjustment" caveat that is load-bearing in the Entry 31–32 verdict.
+
+Honest expectations: MAP is a strong severity marker (eICU pre-match SMD −0.38, treated lower), so
+adjusting for it will most likely nudge eICU **toward null** (→ supports confounding-by-indication) or
+leave it (→ minor robustness). It is a *partial* fix — vaso and vent are still missing, so even +MAP eICU
+is not full parity with MIMIC/IUH's 23-var set. Report regardless of direction. Corrects the Entry 31
+framing: eICU's MAP gap was fixable; its vaso/vent gaps are not.
+
+>>> CODEX TASK QUEUED (Entry 36): full-eICU "+MAP" sensitivity (re-match + DR-augment check) vs frozen eICU + MIMIC. Labeled sensitivity, not the frozen primary. Aggregate CSVs only. STOP after Entry 36. <<<
+
+---
+
+## Entry 36 — Full-eICU dual-source `+MAP` sensitivity (2026-07-20, Codex)
+
+### Scope and estimator integrity
+
+This is the Entry-35-approved, labeled eICU `+MAP` sensitivity. It does not
+replace or modify frozen v3.3. No single-site analysis was run, and vaso/vent
+were not added. The sensitivity used the full eICU source cohort and the
+unchanged frozen risk-set eligibility, prevalent-AKI screen, control rule,
+baseline, crossover censor, MICE m=20, logistic PS, 1:1 replacement matching,
+0.2-SD caliper, HC1 inference, and balance-triggered DR.
+
+`extract_eicu_dual_map.py` rescanned raw
+`vitalPeriodic.systemicmean` and
+`vitalAperiodic.noninvasivemean`, retained values 20-200, and selected the
+last value strictly before each patient's frozen T0. Exact-time cross-source
+ties prefer periodic systemic mean; remaining ties use the maximum value.
+The resulting patient-level MAP cache remains on Tempest and is ignored by
+git. It exactly reproduced Entry 34 coverage: 2,067/2,298 treated (89.95%) and
+14,944/16,778 controls (89.07%).
+
+The PS contains the frozen 20 eICU clinical covariates plus MAP = 21 clinical
+covariates. The prespecified MAP-missing indicator is an additional design
+column, so the fitted matrix has 22 columns. This count distinction avoids
+silently calling the indicator a second clinical covariate.
+
+Remote execution:
+
+- Tempest `4263358`: raw MAP extraction completed; the R stage stopped before
+  PS fitting because a guard mistakenly compared eligible treated with the
+  frozen matched count. The authoritative values are 1,981 eligible and
+  1,949 frozen matched, not 1,949 eligible.
+- Tempest `4263359`: completed after correcting that guard only.
+- Tempest `4263360`: final deterministic rerun with persisted missingness-rate
+  diagnostics; completed, exit 0, 1m35s, peak RSS 1.79 GB.
+
+### Match and MAP balance
+
+The `+MAP` run matched 1,955/1,981 eligible treated patients (98.69%; caliper
+0.02432), so the match-rate guard passed. Three post-match variables exceeded
+SMD 0.1 and entered DR: eGFR 0.133, lactate 0.228, and MAP missingness 0.270.
+
+| MAP balance measure | Before matching | After `+MAP` matching |
+|---|---:|---:|
+| MAP, MICE completed-data SMD | 0.568 | 0.066 |
+| MAP, available-case SMD | 0.569 | 0.035 |
+| MAP-missing indicator SMD | 0.011 | 0.270 |
+| MAP missing, treated | 10.60% | 9.72% |
+| MAP missing, control | 10.93% | 19.13% |
+
+Thus actual MAP values balanced well, but the missingness indicator became
+the maximum imbalance. A read-only count check confirmed this was not an
+indicator inversion: replacement/risk-set matching concentrated MAP-missing
+controls (374/1,955) relative to treated patients (190/1,955). The estimator
+was not altered to repair this post-result; the indicator remained in the PS
+and entered the DR outcome model under the frozen SMD>0.1 rule. This limits
+the rematched sensitivity's interpretation.
+
+### AKI results: DR comparison
+
+Every cell has >=20 events in each arm; no cell is greyed. Values are OR
+[95% CI]; RD [95% CI]. `Frozen pairs +MAP` is the requested check that adds
+MAP and its missingness indicator to the outcome model on the unchanged
+frozen eICU pairs. Exact P values, rates, Ns, and event counts are in the
+committed comparison CSV.
+
+| Outcome | Frozen eICU, 20-var DR | `+MAP` re-matched DR | Frozen pairs +MAP DR | MIMIC DR reference |
+|---|---|---|---|---|
+| AKI>=1 48h | 1.24 [1.06, 1.45]; +0.034 [+0.007, +0.060] | 1.31 [1.11, 1.54]; +0.043 [+0.016, +0.070] | 1.22 [1.03, 1.43]; +0.031 [+0.003, +0.058] | 1.88 [1.71, 2.07]; +0.123 [+0.105, +0.141] |
+| AKI>=1 7d | 1.24 [1.06, 1.45]; +0.038 [+0.010, +0.066] | 1.35 [1.15, 1.58]; +0.053 [+0.024, +0.081] | 1.21 [1.03, 1.42]; +0.032 [+0.003, +0.062] | 1.76 [1.60, 1.94]; +0.119 [+0.099, +0.139] |
+| AKI>=2 48h | 1.19 [0.82, 1.72]; +0.005 [-0.006, +0.016] | 1.27 [0.88, 1.84]; +0.007 [-0.004, +0.017] | 1.27 [0.88, 1.85]; +0.007 [-0.004, +0.018] | 1.97 [1.59, 2.45]; +0.024 [+0.016, +0.032] |
+| AKI>=2 7d | 1.23 [0.92, 1.64]; +0.010 [-0.004, +0.025] | 1.25 [0.93, 1.66]; +0.011 [-0.004, +0.026] | 1.18 [0.87, 1.59]; +0.008 [-0.007, +0.023] | 1.92 [1.60, 2.30]; +0.037 [+0.027, +0.048] |
+
+### PSM-only comparison
+
+The unadjusted matched-pair estimates also moved upward for AKI>=1 after
+`+MAP` rematching:
+
+| Outcome | Frozen eICU PSM | `+MAP` re-matched PSM |
+|---|---|---|
+| AKI>=1 48h | 1.10 [0.95, 1.28]; +0.017 [-0.010, +0.044] | 1.18 [1.01, 1.38]; +0.029 [+0.002, +0.056] |
+| AKI>=1 7d | 1.13 [0.98, 1.32]; +0.024 [-0.005, +0.052] | 1.25 [1.08, 1.46]; +0.042 [+0.014, +0.071] |
+| AKI>=2 48h | 1.21 [0.84, 1.76]; +0.006 [-0.005, +0.017] | 1.16 [0.79, 1.69]; +0.004 [-0.007, +0.015] |
+| AKI>=2 7d | 1.19 [0.89, 1.60]; +0.009 [-0.006, +0.023] | 1.22 [0.91, 1.63]; +0.010 [-0.005, +0.025] |
+
+### Honest interpretation
+
+MAP under-adjustment explains, at most, a **small part** of eICU's weak
+AKI>=1 signal. The cleaner within-pairs check holds patients and matching
+fixed and moves DR modestly toward null: 48h OR 1.24 to 1.22 and RD +3.39 to
++3.05 percentage points; 7d OR 1.24 to 1.21 and RD +3.80 to +3.24 points.
+Stage>=2 is mixed and imprecise. In contrast, adding MAP to the PS and
+rematching moves AKI>=1 upward (48h DR 1.31/RD +4.31 points; 7d 1.35/+5.26
+points), partly because it selects a different control mix and leaves a large
+MAP-missingness imbalance despite excellent balance on observed MAP.
+
+Therefore `+MAP` does **not** make eICU converge toward null, nor does it make
+eICU approach the much larger MIMIC association. The cross-database picture
+is unchanged: eICU retains a modest AKI>=1 signal, stage>=2 remains weak, and
+MIMIC remains the outlier in magnitude. This sensitivity corrects the earlier
+claim that eICU MAP was unrecoverable, but only narrows one measurement gap;
+vasopressor and clean ventilation remain incomplete and differential, so
+eICU still lacks full MIMIC/IUH covariate parity. No stronger causal claim is
+warranted.
+
+### Aggregate artifacts and gate
+
+- `results/eicu_map_sensitivity_match.csv`
+- `results/eicu_map_sensitivity_balance.csv`
+- `results/eicu_map_sensitivity_effects.csv`
+- `results/eicu_map_sensitivity_comparison.csv`
+
+Final aggregate QC passed: four files/64 rows, exact reconciliation of every
+frozen eICU reference OR/RD, match rate >90%, correct sparse flags, and no
+patient identifier. The rematched patient-level pair file and MAP cache remain
+only on Tempest and are gitignored.
+
+>>> RESULTS-GATE STOP. Entry 36 is ready for supervisor review; frozen v3.3 remains unchanged. <<<

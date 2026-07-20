@@ -1,0 +1,2 @@
+"db","analysis","clinical_covariates","ps_design_columns","treated_eligible","matched","match_rate","caliper","max_smd","n_viol","map_raw_smd","map_post_smd","map_missing_raw_smd","map_missing_post_smd","map_missing_raw_rate_trt","map_missing_raw_rate_ctl","map_missing_post_rate_trt","map_missing_post_rate_ctl"
+"EICU","map_rematched",21,22,1981,1955,0.986875315497224,0.0243232034901537,0.270249724969272,3,0.568129891088889,0.0661776836856185,0.0106544428174915,0.270249724969272,0.106007067137809,0.109309810466087,0.0971867007672634,0.191304347826087
