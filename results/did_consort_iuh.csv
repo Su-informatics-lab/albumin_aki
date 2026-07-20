@@ -1,0 +1,13 @@
+step,n
+total_procedure_rows,213454
+accepted_cardiac_procedure_rows,6749
+cardiac_admissions,4462
+first_postop_icu_patients,4198
+adult,4198
+after_eskd_exclusion,3982
+with_early_creatinine,3974
+accepted_iv_albumin_treated,1762
+final_analytic_source,3875
+final_treated,1667
+final_never_treated,2208
+treated_prevalent_aki_at_own_t0_descriptive,127

@@ -1,0 +1,56 @@
+metric,value,detail
+egfr_source_treated_q10,45.53164644714585,
+egfr_source_treated_q25,61.85574397326466,
+egfr_source_treated_q50,79.79629132808488,
+egfr_source_treated_q75,95.58111472296727,
+egfr_source_treated_q90,105.27405677840325,
+egfr_source_treated_G2_n,704.0,
+egfr_source_treated_G1_n,584.0,
+egfr_source_treated_G3plus_n,379.0,
+egfr_source_never_control_q10,56.389807519852035,
+egfr_source_never_control_q25,74.07068885415964,
+egfr_source_never_control_q50,92.0485647166383,
+egfr_source_never_control_q75,102.13792160115102,
+egfr_source_never_control_q90,112.98096683153364,
+egfr_source_never_control_G1_n,1189.0,
+egfr_source_never_control_G2_n,745.0,
+egfr_source_never_control_G3plus_n,274.0,
+egfr_matched_treated_q10,50.417951170373186,
+egfr_matched_treated_q25,65.40053092941778,
+egfr_matched_treated_q50,82.4363527141457,
+egfr_matched_treated_q75,96.91646670874955,
+egfr_matched_treated_q90,106.35521547239996,
+egfr_matched_treated_G2_n,594.0,
+egfr_matched_treated_G1_n,529.0,
+egfr_matched_treated_G3plus_n,252.0,
+egfr_matched_control_q10,40.90934158815381,
+egfr_matched_control_q25,54.01324142430333,
+egfr_matched_control_q50,77.6175850279277,
+egfr_matched_control_q75,96.15298704848459,
+egfr_matched_control_q90,103.78189679528516,
+egfr_matched_control_G1_n,494.0,
+egfr_matched_control_G2_n,442.0,
+egfr_matched_control_G3plus_n,439.0,
+matched_pairs,1375.0,
+unique_controls,676.0,
+max_control_reuse,24.0,
+controls_reused_ge5,54.0,
+pairs_from_controls_reused_ge5,423.0,
+matched_smd_egfr,0.246947535333684,raw_smd=0.309003
+matched_smd_alb_cat,0.16102399107569,raw_smd=0.613856
+matched_smd_last_heartrate,0.107360195708212,raw_smd=0.285451
+matched_smd_age,0.10528005637569,raw_smd=0.275868
+matched_smd_pvd,0.103048415094174,raw_smd=0.026814
+matched_smd_vaso_at_t0,0.102292762213609,raw_smd=0.124023
+matched_smd_heart_failure,0.0975916355254154,raw_smd=0.111200
+matched_smd_hypertension,0.092802081625048,raw_smd=0.185507
+matched_smd_last_lactate_missing,0.0817136458307707,raw_smd=0.553660
+matched_smd_map_before_t0,0.0526102094468238,raw_smd=0.661820
+aki1_48h_psm_or,0.965155074027531,rd=-0.006478; p_or=0.706560; p_rd=0.706577
+aki1_48h_dr_or,1.21349126193138,rd=0.025183; p_or=0.058196; p_rd=0.124280
+aki1_7d_psm_or,0.96752099654969,rd=-0.006548; p_or=0.734026; p_rd=0.734048
+aki1_7d_dr_or,1.13693009283991,rd=0.019742; p_or=0.220165; p_rd=0.290867
+death_48h_all_psm_or,0.798239179196293,rd=-0.002182; p_or=0.562721; p_rd=0.561942
+death_48h_all_dr_or,1.19563789308066,rd=0.000703; p_or=0.680354; p_rd=0.851242
+death_7d_all_psm_or,1.30578206078562,rd=0.004364; p_or=0.373837; p_rd=0.372498
+death_7d_all_dr_or,1.93406669476033,rd=0.009069; p_or=0.035997; p_rd=0.068825

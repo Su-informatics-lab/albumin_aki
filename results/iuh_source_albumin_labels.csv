@@ -1,0 +1,16 @@
+source,label,detail,rows,patients,positive_amount_rows
+io,MED INTAKE,Albumin Human 5%,10293,1939,10257
+io,Parent event for a continuous infusion,Albumin Human 5%,2234,1255,2233
+io,Albumin Human 5%,Albumin Human 5%,686,444,677
+io,MED INTAKE,Albumin Human 25%,325,80,321
+io,Parent event for a continuous infusion,Albumin Human 25%,7,5,7
+med,Albumin Human 5%,,5113,1660,5112
+med,Albumin Human 5% (use non-PVC container),,1073,435,1072
+med,Albumin Human 25%,,224,91,223
+med,Albumin Human 5% 500 mL,Begin Bag,7,2,7
+med,Albumin Human 5% 250 mL,Begin Bag,4,1,4
+med,"Albumin Human 5% 1,000 mL",Begin Bag,3,2,3
+med,albumin human,,2,2,2
+med,Albumin Human,,1,1,1
+anesfluid,Albumin Human 5%,,1935,1253,1935
+anesfluid,Albumin Human 25%,,2,2,0

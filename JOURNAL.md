@@ -2520,3 +2520,130 @@ After approval, rerun only the affected P-F/forest pieces, commit all reviewed
 aggregate CSVs, complete the final Entry 19 interpretation, and STOP again.
 
 >>> GUARD-RAIL STOP. Do not interpret or commit the provisional P-F/forest outputs until the two integrity repairs are approved. <<<
+
+## Entry 20 — IUH Phase 7: eGFR concordance passes; pooled balance guard STOP (2026-07-19, Codex)
+
+### Scope and freeze
+
+The user explicitly authorized IUH validation on Quartz and requested Slurm for
+large tasks. I used `iuh-icu-etl` plus `icu-causal-engine`, reviewed the raw
+IUH tables and `/N/project/depot/hw56/mg/iuh`, and froze
+`iuh/STUDY_DESIGN_IUH.md` v1.0 in commit `f612bb3` **before** ETL/outcomes.
+The parent MIMIC/eICU v3.3 design and frozen PS were not changed. The unapproved
+Entry 19 P-F/forest repairs were not touched.
+
+IUH primary uses computed CKD-EPI 2021 eGFR from the same baseline SCr, age,
+and sex as the parent study. The addendum explicitly states that eGFR and
+baseline SCr are not independent biological axes. The prespecified structural
+sensitivity uses IUH lab-reported eGFR only for concordance and alternate
+within-stratum matching.
+
+### Exact commands
+
+```bash
+# quartz: aggregate-only source audit
+cd /N/project/depot/hw56/albumin_aki
+sbatch iuh/run_probe_albumin_sources.sbatch  # job 9720599, COMPLETED
+
+# local: outcome-run freeze
+git commit -m "iuh: freeze external validation design and runners"
+git push origin main                         # f612bb3
+
+# quartz: pre-run tests + ETL
+python3 iuh/test_etl_static.py
+module load r/4.3.1
+Rscript tests/test_phase3_static.R
+sbatch iuh/run_etl.sbatch                    # job 9720644, COMPLETED
+
+# quartz: frozen m=20 batch
+sbatch iuh/run_main.sbatch                   # job 9720657
+scancel 9720657                              # guard stop after pooled balance
+
+# quartz: aggregate-only diagnosis
+python3 iuh/probe_balance.py
+```
+
+Both static suites passed. ETL completed in 7:00 with peak RSS about 1.0 GB.
+
+### Exposure-source audit
+
+Among 4,198 raw-table cardiac-surgery postoperative ICU patients, any
+postoperative albumin appeared for 2,028 patients in IO, 1,993 in Med, and 294
+in AnesFluid. The frozen exposure is positive-volume `IO` with
+`Event == "MED INTAKE"` and `IO` containing albumin: confirmed administered
+intake, matching the mg IUH logic. Med orders and intraoperative AnesFluid were
+not substituted.
+
+### CONSORT and eGFR measurement check
+
+| Step | n |
+|---|---:|
+| Accepted cardiac-procedure rows | 6,749 |
+| First postoperative ICU patients | 4,198 |
+| After ESKD exclusion | 3,982 |
+| With early creatinine | 3,974 |
+| Final analytic source | 3,875 |
+| Final treated / never treated | 1,667 / 2,208 |
+| Treated prevalent AKI at own T0 (descriptive) | 127 |
+
+Lab-reported eGFR was aligned within six hours for 3,874/3,875. Computed versus
+reported eGFR had Pearson r=0.930, median reported-minus-computed=-4.21, and
+G1/G2/G3+ agreement 3,564/3,874 (92.0%). Discordance was almost entirely
+adjacent-category: computed G3+ -> reported G2=20; G2 -> G3+=60 or G1=43;
+G1 -> G2=187; no G1/G3+ two-level swaps. This supports the computed-eGFR
+definition and shows modest boundary reclassification, not formula failure.
+
+### Frozen pooled result and guard trigger
+
+Treated pair-time eligibility was 1,377/1,667; 1,375 matched (99.9%). Match
+rate passed, but balance did not:
+
+| Variable | Raw SMD | Matched SMD |
+|---|---:|---:|
+| eGFR | 0.309 | **0.247** |
+| alb_cat | 0.614 | **0.161** |
+| heart rate | 0.285 | **0.107** |
+| age | 0.276 | **0.105** |
+| PVD | 0.027 | **0.103** |
+| vasopressor at T0 | 0.124 | **0.102** |
+
+There were six violations >0.10. The diagnostic shows 676 unique controls for
+1,375 pairs, maximum control reuse 24; 423 pairs came from controls reused at
+least five times. More importantly, matched treated median eGFR was 82.4
+versus 77.6 in controls, even though source treated/control medians were 79.8
+versus 92.0. The joint frozen PS selected a lower-eGFR control subset and did
+not balance renal reserve.
+
+The prespecified DR rule changes the provisional pooled read enough to make
+the imbalance consequential: KDIGO>=1 PSM OR/RD was 0.97/-0.65 pp at both
+48h and 7d, while DR was 1.21/+2.52 pp at 48h and 1.14/+1.97 pp at 7d.
+Fixed-window mortality PSM RD was -0.22 pp (48h) and +0.44 pp (7d); DR RD was
++0.07 pp and +0.91 pp, respectively. These are diagnostic only and are not
+interpreted as IUH validation results.
+
+### Gate status
+
+- ✅ Raw Procedure + ICU-stay cohort; no convenience parquet.
+- ✅ Patient-level data and pairs remain on Quartz.
+- ✅ Freeze committed before outcome run; m=20 used.
+- ✅ Computed-versus-reported eGFR concordance is strong and classification
+  disagreement is adjacent-boundary.
+- ✅ Match-rate guard passed.
+- ❌ Balance guard failed (max SMD 0.247; six violations).
+- ✅ Job cancelled before completing computed/reported eGFR strata or HTE; no
+  flexible PS, rematch, or covariate reselection attempted.
+
+### Decision needed
+
+The least outcome-informed next step is to authorize continuation with the
+unchanged frozen estimator, report both PSM and the already-prespecified DR
+estimates, and explicitly downgrade IUH if their directions remain discordant.
+Alternatives such as logit-PS calipers, nonlinear eGFR, exact renal-reserve
+matching, or a different replacement rule are estimator changes and require a
+new approved design version; I did not try them.
+
+Aggregate committed candidates: source audit, CONSORT, eGFR concordance and
+crosstab, pooled risk-set/balance/binary results, and balance probe. Patient
+tables and `*pairs*` remain ignored on Quartz.
+
+>>> GUARD-RAIL STOP. Do not resume IUH eGFR-stratified/reported-eGFR/HTE jobs or alter the frozen PS until the balance decision is approved. <<<
