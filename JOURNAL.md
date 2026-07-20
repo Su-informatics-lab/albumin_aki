@@ -2959,3 +2959,150 @@ numbers to the clinician meeting (Yan/Eadon/Meng) to set framing (harm phenotype
 eGFR gradient MIMIC-secondary) and venue. No estimator rescue; no product-as-exposure.
 
 >>> APPROVED (data-science salvage): verify+fix grams; dose-response + grams×eGFR; continuous-eGFR spline all DBs; random-effects meta-analysis of the interaction. Report Entry 25; STOP. Then clinician meeting. <<<
+
+---
+
+## Entry 25 — Verify-before-compute dose STOP; frozen-pair three-database gradient/meta completed  (2026-07-20, Codex)
+
+### Gate status and estimator integrity
+
+The frozen v3.3 binary exposure, propensity-score specification, caliper, and
+matched pairs were not changed. No rematching was performed. The new gradient
+layer reads the existing pooled pair files only. Its linear treatment-by-eGFR
+ORs reproduce the canonical `03_hte.R` values to \(<10^{-12}\) in MIMIC,
+eICU, and IUH. Valid pair counts remain 4,690/4,202 (MIMIC 48h/7d),
+1,887/1,815 (eICU), and 1,235/1,069 (IUH).
+
+### Part 1 — raw-dose verification failed the required concentration check
+
+The raw-table check establishes two different facts which must not be
+conflated:
+
+1. **`inputevents.amount` is infused volume.** In the five anonymized
+   hand-checked courses, `amount` is in mL and equals infusion rate times
+   duration. Across the raw albumin rows this identity held for 100% of rows
+   with mL/hour units. Typical amounts were 50 mL (median; P10-P90 50-100) for
+   item 220862 and 250 mL (median; P10-P90 250-500) for item 220864.
+2. **The item label does not reliably identify the concentration of that
+   infused volume.** The tail audit found repeated 500-mL events stored under
+   item 220862 (`Albumin 25%`). Same-admission pharmacy records identify these
+   administrations as `Albumin 5% (25g / 500mL)`, not 125 g of neat 25%
+   albumin. One such 500-mL event would therefore be overestimated five-fold
+   by `amount × 0.25`. This is precisely the diluted-volume failure the
+   verify-first gate was intended to detect.
+
+The apparent volume-times-item-label candidate had a median 37.5 g, IQR
+25-50 g, maximum 625 g, with 8 courses above 250 g; these are **invalid
+candidate values, not a corrected grams distribution**. There were no exact
+duplicate input rows in the eight largest candidates, so deduplication cannot
+repair the problem. eMAR supplied a gram dose within 60 minutes for only 3 of
+41 input events (7.3%) in the eight audited tail courses; it cannot provide a
+complete replacement dose source. There were 27 albumin pharmacy-order rows
+for those 41 input events; event/order counts disagreed in 7 of 8 courses, and
+6 courses had 500-mL `25%` input rows but only 5% pharmacy orders. Pharmacy
+orders reveal the product strength but do not map one-to-one to administrations
+and cannot safely be summed as administered grams.
+
+Consequently, total grams are not identifiable at adequate coverage from the
+available MIMIC administration fields. IUH IO likewise has volume and a text
+label but no independently verified administered-mass field, so IUH grams were
+also not computed. eICU remained excluded as prespecified. The extractor now
+hard-stops unless an explicitly named **unvalidated probe-only** flag is used,
+and the old product/dose mechanism block (`first concentration × total
+volume`) has been removed from the executable HTE sweep. The earlier 5%-versus-
+25% result is retained only as historical provenance and is not an exposure
+contrast.
+
+### Part 2 — dose-response not run
+
+Per the verify-before-compute guard rail, no continuous, tertile, spline,
+volume, or grams-by-eGFR outcome model was fit. Running those models would turn
+a known five-fold dose misclassification into a spurious mechanistic result.
+There is therefore **no defensible dose-response finding**, positive or null,
+from this data source. A future dose analysis requires an administration-level
+source that records actual grams (or a validated order-to-administration
+linkage with near-complete coverage) before any model is authorized.
+
+### Part 3 — common-scale continuous-eGFR spline
+
+For KDIGO>=1 at 48h and 7d, I fit scale-specific HC1 models on the existing
+pairs: quasibinomial for OR and linear probability for RD. The treated
+patient's baseline eGFR remains the pair-level modifier. All databases use the
+same natural-spline specification (interior knots 60/90, boundary knots
+0/200) and the same displayed grid (30-120). The full grid with 95% CIs is in
+the aggregate `salvage_egfr_spline_*.csv` files. Every G1/G2/G3+ source cell
+had at least 20 events in each arm; no displayed segment is sparse-greyed.
+
+Representative spline contrasts (albumin versus matched control) are:
+
+| DB / horizon | eGFR 30 | eGFR 60 | eGFR 90 | eGFR 120 |
+|---|---:|---:|---:|---:|
+| MIMIC 48h OR | 8.75 [5.66, 13.52] | 3.15 [2.61, 3.81] | 1.31 [1.16, 1.49] | 0.66 [0.45, 0.96] |
+| MIMIC 48h RD | 0.493 [0.412, 0.575] | 0.255 [0.216, 0.294] | 0.054 [0.029, 0.079] | -0.075 [-0.144, -0.006] |
+| MIMIC 7d OR | 8.50 [5.31, 13.61] | 3.00 [2.47, 3.65] | 1.30 [1.15, 1.48] | 0.92 [0.64, 1.33] |
+| MIMIC 7d RD | 0.486 [0.398, 0.575] | 0.255 [0.212, 0.297] | 0.058 [0.030, 0.085] | -0.014 [-0.090, 0.063] |
+| eICU 48h OR | 2.00 [1.37, 2.91] | 1.43 [1.11, 1.83] | 0.74 [0.58, 0.95] | 0.65 [0.33, 1.27] |
+| eICU 48h RD | 0.151 [0.070, 0.232] | 0.068 [0.020, 0.116] | -0.045 [-0.083, -0.008] | -0.055 [-0.140, 0.030] |
+| eICU 7d OR | 1.86 [1.27, 2.73] | 1.42 [1.11, 1.82] | 0.79 [0.63, 1.00] | 1.09 [0.61, 1.97] |
+| eICU 7d RD | 0.139 [0.054, 0.223] | 0.071 [0.021, 0.121] | -0.040 [-0.081, 0.000] | 0.021 [-0.083, 0.124] |
+| IUH 48h OR | 5.37 [2.24, 12.90] | 1.23 [0.89, 1.70] | 0.66 [0.50, 0.88] | 0.75 [0.39, 1.47] |
+| IUH 48h RD | 0.389 [0.214, 0.564] | 0.044 [-0.020, 0.108] | -0.066 [-0.110, -0.023] | -0.038 [-0.108, 0.032] |
+| IUH 7d OR | 6.30 [2.41, 16.43] | 1.21 [0.85, 1.71] | 0.68 [0.51, 0.91] | 0.88 [0.41, 1.86] |
+| IUH 7d RD | 0.418 [0.233, 0.602] | 0.044 [-0.028, 0.116] | -0.070 [-0.120, -0.019] | -0.021 [-0.124, 0.083] |
+
+The spline reveals a real continuous eICU gradient from eGFR 30 through about
+90 which the three coarse strata obscured. It is weaker than MIMIC and the 7d
+curve turns back toward null at the high-eGFR tail with wide uncertainty; it
+is therefore not a clean shape replication. IUH has the same low-reserve
+direction but a sharper, less precise low-eGFR curve and must retain the
+Entry-23 balance limitation.
+
+### Linear interactions and random-effects meta-analysis
+
+The interaction OR is the multiplicative change per +30 mL/min/1.73m2 eGFR;
+the interaction RD is the change in the albumin-control absolute risk
+difference per +30 eGFR.
+
+| DB | Horizon | Interaction OR [95% CI], P | Interaction RD [95% CI], P |
+|---|---|---|---|
+| MIMIC | 48h | 0.423 [0.371, 0.482], 8.9e-38 | -0.191 [-0.217, -0.165], 1.8e-47 |
+| MIMIC | 7d | 0.472 [0.413, 0.540], 5.3e-28 | -0.173 [-0.202, -0.145], 2.4e-33 |
+| eICU | 48h | 0.621 [0.514, 0.749], 6.9e-7 | -0.088 [-0.121, -0.054], 2.8e-7 |
+| eICU | 7d | 0.702 [0.582, 0.847], 2.2e-4 | -0.070 [-0.106, -0.035], 1.1e-4 |
+| IUH | 48h | 0.533 [0.409, 0.694], 3.0e-6 | -0.107 [-0.152, -0.061], 4.4e-6 |
+| IUH | 7d | 0.552 [0.420, 0.727], 2.3e-5 | -0.112 [-0.163, -0.060], 2.7e-5 |
+
+The three-database REML random-effects results (normal 95% CI, k=3) are:
+
+| Horizon | Pooled interaction OR [95% CI], P | I2 | Pooled interaction RD [95% CI], P | I2 |
+|---|---|---:|---|---:|
+| 48h | 0.514 [0.405, 0.652], 3.8e-8 | 82.2% | -0.130 [-0.194, -0.066], 7.4e-5 | 92.4% |
+| 7d | 0.565 [0.443, 0.721], 4.4e-6 | 82.4% | -0.120 [-0.181, -0.058], 1.5e-4 | 90.2% |
+
+Thus the pooled modifier is strongly directionally concordant—harm rises as
+renal reserve falls—but heterogeneity is very high on both scales. The pooled
+number is a summary of non-identical gradients, not evidence that the three
+databases share one transportable effect-modification curve.
+
+### Honest interpretation
+
+There is **no validated dose-response result** because the required grams
+variable failed source verification; neither a positive nor a null dose claim
+is supportable. eICU does contain a hidden continuous low-eGFR gradient, but it
+is weaker and less stable at the high-eGFR tail than MIMIC. The pooled
+interaction is OR 0.51 (48h) and 0.57 (7d) per +30 eGFR, with very high
+heterogeneity (I2 about 82%; RD I2 90-92%). The renal-reserve modifier remains
+hypothesis-generating: strongest and cleanest in MIMIC, directionally present
+in eICU, and directionally but balance-limited in IUH. These findings do not
+rescue the external-validation limitations and do not establish an
+osmotic-nephrosis dose mechanism.
+
+### Aggregate artifacts and gate
+
+Committed artifacts are the three source-semantic probe CSVs, the three
+database spline/grid/cell CSV families, the three scale-specific interaction
+CSVs, and `salvage_interaction_meta.csv`. The overlay is represented by the
+common-grid aggregate CSVs; no patient-level plot data, pair file, or
+spot-check file was copied from Tempest/Quartz.
+
+>>> RESULTS-GATE STOP. Dose modeling is blocked pending an independently validated administered-grams source; the completed gradient/meta results are ready for supervisor and clinician review. <<<

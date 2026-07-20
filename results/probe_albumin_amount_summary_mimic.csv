@@ -1,0 +1,4 @@
+itemid,label,amountuom,rateuom,n_events,n_stays,p10_amount,median_amount,p90_amount,median_amount_over_rate_duration,fraction_amount_matches_rate_duration
+220862,Albumin 25%,mL,mL/hour,26470,5253,49.999998807907104,49.999998807907104,99.99999761581421,0.9999999761581421,1.0
+220864,Albumin 5%,mL,mL/hour,30904,10578,249.99999046325684,249.99999046325684,499.9999809265137,1.000000022888185,1.0
+220864,Albumin 5%,mL,mL/min,2,1,250.0,250.0,250.0,60.00000000000001,0.0

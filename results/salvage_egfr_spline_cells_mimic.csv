@@ -1,0 +1,7 @@
+"db","outcome","egfr_cell","n_pairs","events_trt","events_ctl","sparse_lt20"
+"MIMIC","aki1_48h","G3plus_lt60",671,403,169,FALSE
+"MIMIC","aki1_48h","G2_60_89",1639,624,367,FALSE
+"MIMIC","aki1_48h","G1_ge90",2380,631,644,FALSE
+"MIMIC","aki1_7d","G3plus_lt60",585,363,162,FALSE
+"MIMIC","aki1_7d","G2_60_89",1469,623,396,FALSE
+"MIMIC","aki1_7d","G1_ge90",2148,688,656,FALSE

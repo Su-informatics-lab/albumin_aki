@@ -1,0 +1,3 @@
+population,n,candidate_grams_gt_100,candidate_grams_gt_150,candidate_grams_gt_250,volume_gt_2000ml,max_candidate_grams,max_volume_ml,top8_exact_duplicate_event_rows
+all_treated,5771,117,27,8,77,624.9999761581421,4999.999809265137,0
+matched_treated,5428,112,25,7,74,624.9999761581421,4999.999809265137,0
