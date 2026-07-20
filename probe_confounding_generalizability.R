@@ -8,7 +8,6 @@ suppressPackageStartupMessages({
   library(sandwich)
   library(lmtest)
   library(mice)
-  library(metafor)
 })
 
 args <- commandArgs(trailingOnly = TRUE)
