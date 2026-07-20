@@ -363,7 +363,11 @@ match_summary <- data.frame(
   map_raw_smd = raw_smds["map_before_t0"],
   map_post_smd = smds["map_before_t0"],
   map_missing_raw_smd = raw_smds["map_missing"],
-  map_missing_post_smd = smds["map_missing"]
+  map_missing_post_smd = smds["map_missing"],
+  map_missing_raw_rate_trt = mean(all_pts$map_missing[treated_ok]),
+  map_missing_raw_rate_ctl = mean(all_pts$map_missing[raw_ctl_idx]),
+  map_missing_post_rate_trt = mean(all_pts$map_missing[pairs$trt_idx]),
+  map_missing_post_rate_ctl = mean(all_pts$map_missing[pairs$ctl_idx])
 )
 
 reference_rows <- list()
