@@ -384,14 +384,20 @@ for (arm in c("trt", "ctl")) {
   baseline_offset <- pairs[[paste0("baseline_", arm, "_offset_h")]]
   early <- as.numeric(early_value[pid])
   early_h <- as.numeric(early_offset[pid])
-  order_valid <- !is.na(early) & !is.na(early_h) & !is.na(baseline) &
-    !is.na(baseline_offset) & early_h <= baseline_offset
+  complete_times <- !is.na(early) & !is.na(early_h) & !is.na(baseline) &
+    !is.na(baseline_offset)
+  order_valid <- complete_times & early_h <= baseline_offset
   dip <- early[order_valid] - baseline[order_valid]
   dip_rows[[length(dip_rows) + 1L]] <- data.frame(
     db = db, population = "frozen_pair_members_pair_weighted",
     arm = if (arm == "trt") "treated" else "control",
     n_pair_members = length(pid), n_time_order_valid = sum(order_valid),
     n_time_order_invalid_or_missing = sum(!order_valid),
+    n_missing_reference_or_baseline = sum(!complete_times),
+    n_early_reference_after_pair_baseline = sum(
+      complete_times & early_h > baseline_offset
+    ),
+    n_same_timestamp = sum(order_valid & early_h == baseline_offset),
     q25_dip = as.numeric(quantile(dip, 0.25)),
     median_dip = median(dip),
     q75_dip = as.numeric(quantile(dip, 0.75)),
