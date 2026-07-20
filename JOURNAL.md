@@ -3461,3 +3461,176 @@ PSM and DR OR/RD estimates, CIs, P values, event counts, sample sizes, and
 sparse-cell flags. No pair or patient-level file was copied or committed.
 
 >>> RESULTS-GATE STOP. Entry 28 is ready for supervisor review; no new outcome definition or estimator has been run. <<<
+
+---
+
+## Entry 29 — Scheduled single-creatinine-per-day surveillance sensitivity (2026-07-20, Codex)
+
+### Scope, definitions, and integrity gate
+
+This approved follow-up remained read-only on the frozen v3.3 pooled pairs:
+MIMIC 5,428, eICU 1,949, and IUH 1,375. No propensity score was fit, no pair
+was changed, and the exposure, baseline (`last strictly before T0`), crossover
+censor, covariates, balance-triggered DR adjustment, and missing-post-Cr
+coding were unchanged.
+
+Within each T0-anchored day `(T0 + 24*(d-1), T0 + 24*d]`, the two new rules
+retain exactly one draw:
+
+1. `closest_anchor`: the draw closest to that day's 24/48/.../168h end anchor.
+   Equal distances use the earlier timestamp.
+2. `first_of_day`: the earliest draw in that T0-anchored day.
+
+The closest rule is restricted to its corresponding day, preventing one draw
+from being reused at adjacent anchors. Before either selection, exact-time
+ties retain the frozen deterministic rule (maximum creatinine at the tied
+timestamp). A static fixture verified exact-time ties, both selectors, and
+the transient-blip classifier.
+
+Each remote run reconciled the native PSM and DR results exactly to Entry 28
+before writing a new result. Final aggregate QC passed for 72 estimator rows
+and 72 blip rows, with exact native reconciliation. Slurm jobs were:
+
+- Tempest `4263095` (R 4.5.1; MIMIC then eICU): completed, exit 0, 3m59s.
+- Quartz `9724436` (R 4.3.1; IUH): completed, exit 0, 50s.
+
+### Native versus schedule-limited ascertainment
+
+Every cell is OR [95% CI]; RD [95% CI]. No treatment-effect cell has <20 AKI
+events in either arm under these rules, so none of the following estimator
+cells is greyed. Full P values, rates, event counts, and sparse flags are in
+the committed aggregate CSVs.
+
+#### PSM
+
+| Database / outcome | Native | Closest to 24h anchor | First of T0-day |
+|---|---|---|---|
+| MIMIC AKI>=1 48h | 1.63 [1.49, 1.78]; +0.102 [0.083, 0.120] | 1.58 [1.44, 1.73]; +0.092 [0.074, 0.110] | 1.64 [1.50, 1.80]; +0.097 [0.080, 0.115] |
+| MIMIC AKI>=2 48h | 1.79 [1.44, 2.23]; +0.022 [0.014, 0.029] | 1.85 [1.47, 2.33]; +0.020 [0.013, 0.028] | 1.57 [1.22, 2.01]; +0.012 [0.006, 0.019] |
+| MIMIC AKI>=1 7d | 1.63 [1.49, 1.78]; +0.109 [0.089, 0.130] | 1.59 [1.45, 1.74]; +0.100 [0.081, 0.120] | 1.59 [1.45, 1.74]; +0.100 [0.080, 0.120] |
+| MIMIC AKI>=2 7d | 1.78 [1.49, 2.13]; +0.035 [0.024, 0.045] | 1.84 [1.53, 2.23]; +0.033 [0.023, 0.043] | 1.80 [1.49, 2.17]; +0.032 [0.022, 0.042] |
+| eICU AKI>=1 48h | 1.10 [0.95, 1.28]; +0.017 [-0.010, 0.044] | 1.12 [0.96, 1.31]; +0.019 [-0.007, 0.045] | 1.09 [0.93, 1.28]; +0.015 [-0.011, 0.041] |
+| eICU AKI>=2 48h | 1.21 [0.84, 1.76]; +0.006 [-0.005, 0.017] | 1.25 [0.84, 1.85]; +0.006 [-0.005, 0.016] | 1.18 [0.77, 1.82]; +0.004 [-0.006, 0.013] |
+| eICU AKI>=1 7d | 1.13 [0.98, 1.32]; +0.024 [-0.005, 0.052] | 1.15 [0.99, 1.34]; +0.026 [-0.001, 0.054] | 1.14 [0.98, 1.32]; +0.024 [-0.004, 0.052] |
+| eICU AKI>=2 7d | 1.19 [0.89, 1.60]; +0.009 [-0.006, 0.023] | 1.10 [0.81, 1.49]; +0.004 [-0.010, 0.018] | 1.20 [0.88, 1.62]; +0.008 [-0.006, 0.022] |
+| IUH AKI>=1 48h | 0.97 [0.80, 1.16]; -0.006 [-0.040, 0.027] | 0.96 [0.80, 1.16]; -0.006 [-0.040, 0.027] | 0.94 [0.77, 1.13]; -0.011 [-0.044, 0.021] |
+| IUH AKI>=2 48h | 0.94 [0.62, 1.41]; -0.002 [-0.018, 0.013] | 0.83 [0.54, 1.27]; -0.006 [-0.021, 0.008] | 0.76 [0.46, 1.24]; -0.007 [-0.020, 0.006] |
+| IUH AKI>=1 7d | 0.97 [0.80, 1.17]; -0.007 [-0.044, 0.031] | 0.99 [0.81, 1.20]; -0.003 [-0.040, 0.034] | 0.96 [0.79, 1.16]; -0.008 [-0.046, 0.029] |
+| IUH AKI>=2 7d | 1.02 [0.72, 1.44]; +0.001 [-0.020, 0.022] | 0.91 [0.63, 1.29]; -0.006 [-0.026, 0.015] | 0.98 [0.68, 1.43]; -0.001 [-0.020, 0.018] |
+
+#### Doubly robust (same frozen balance trigger)
+
+| Database / outcome | Native | Closest to 24h anchor | First of T0-day |
+|---|---|---|---|
+| MIMIC AKI>=1 48h | 1.88 [1.71, 2.07]; +0.123 [0.105, 0.141] | 1.81 [1.64, 1.99]; +0.111 [0.093, 0.129] | 1.87 [1.69, 2.06]; +0.114 [0.097, 0.132] |
+| MIMIC AKI>=2 48h | 1.97 [1.59, 2.45]; +0.024 [0.016, 0.032] | 2.04 [1.62, 2.57]; +0.023 [0.015, 0.030] | 1.71 [1.34, 2.19]; +0.014 [0.007, 0.020] |
+| MIMIC AKI>=1 7d | 1.76 [1.60, 1.94]; +0.119 [0.099, 0.139] | 1.70 [1.55, 1.87]; +0.109 [0.089, 0.128] | 1.70 [1.55, 1.87]; +0.108 [0.089, 0.127] |
+| MIMIC AKI>=2 7d | 1.92 [1.60, 2.30]; +0.037 [0.027, 0.048] | 2.00 [1.65, 2.42]; +0.036 [0.026, 0.046] | 1.94 [1.60, 2.34]; +0.034 [0.024, 0.044] |
+| eICU AKI>=1 48h | 1.24 [1.06, 1.45]; +0.034 [0.007, 0.060] | 1.27 [1.08, 1.49]; +0.036 [0.010, 0.062] | 1.23 [1.05, 1.45]; +0.031 [0.005, 0.057] |
+| eICU AKI>=2 48h | 1.19 [0.82, 1.72]; +0.005 [-0.006, 0.016] | 1.21 [0.81, 1.80]; +0.005 [-0.005, 0.015] | 1.14 [0.75, 1.75]; +0.003 [-0.006, 0.012] |
+| eICU AKI>=1 7d | 1.24 [1.06, 1.45]; +0.038 [0.010, 0.066] | 1.26 [1.08, 1.48]; +0.040 [0.012, 0.068] | 1.25 [1.07, 1.46]; +0.038 [0.010, 0.066] |
+| eICU AKI>=2 7d | 1.23 [0.92, 1.64]; +0.010 [-0.004, 0.025] | 1.13 [0.83, 1.52]; +0.006 [-0.008, 0.020] | 1.24 [0.92, 1.68]; +0.010 [-0.004, 0.024] |
+| IUH AKI>=1 48h | 1.21 [0.99, 1.48]; +0.025 [-0.007, 0.057] | 1.21 [0.99, 1.49]; +0.023 [-0.008, 0.055] | 1.16 [0.94, 1.42]; +0.016 [-0.016, 0.047] |
+| IUH AKI>=2 48h | 1.08 [0.71, 1.66]; +0.003 [-0.013, 0.018] | 0.97 [0.63, 1.51]; -0.001 [-0.016, 0.014] | 0.86 [0.52, 1.43]; -0.004 [-0.017, 0.009] |
+| IUH AKI>=1 7d | 1.14 [0.93, 1.40]; +0.020 [-0.017, 0.056] | 1.15 [0.94, 1.42]; +0.022 [-0.014, 0.058] | 1.11 [0.90, 1.36]; +0.014 [-0.022, 0.050] |
+| IUH AKI>=2 7d | 1.08 [0.74, 1.57]; +0.004 [-0.017, 0.025] | 0.99 [0.67, 1.45]; -0.002 [-0.022, 0.019] | 1.07 [0.71, 1.59]; +0.002 [-0.018, 0.022] |
+
+For MIMIC AKI>=1, schedule limitation removes only 0.8-1.2 absolute
+percentage points from the DR RD: 48h +0.123 native versus +0.111 closest and
++0.114 first; 7d +0.119 versus +0.109 and +0.108. This is about a 7-10%
+relative reduction in the RD, while the OR remains 1.70-1.87. MIMIC event
+counts fall in both arms: at 48h, 1,658/1,180 native become 1,543/1,110
+(closest) and 1,499/1,042 (first); at 7d, 1,674/1,214 become 1,571/1,149 and
+1,545/1,126. The reduction is therefore not confined to treated patients.
+
+MIMIC AKI>=2 at 48h is more timing-sensitive under first-of-day (DR OR 1.97
+to 1.71; RD +0.024 to +0.014), but closest-anchor does not attenuate it and
+the 7d AKI>=2 result is stable. The primary stage-1 pattern does not approach
+the eICU/IUH estimates under either schedule.
+
+### Transient isolated-high fraction
+
+An isolated blip requires exactly one selected value over the outcome-specific
+KDIGO threshold, with the preceding value (or unchanged baseline for the first
+post-T0 value) and the following selected creatinine both below threshold.
+An unconfirmed terminal high value is not called a blip. Fractions are
+`isolated blips / AKI flags`. **GREY** means either the AKI-flag denominator or
+the isolated-blip numerator is <20; grey cells are reported but not
+interpreted.
+
+| DB | Outcome | Rule | Treated | Control |
+|---|---|---|---:|---:|
+| MIMIC | AKI>=1 48h | Native | 235/1,658 (14.2%) | 135/1,180 (11.4%) |
+| MIMIC | AKI>=1 48h | Closest | 203/1,543 (13.2%) | 116/1,110 (10.5%) |
+| MIMIC | AKI>=1 48h | First | 120/1,499 (8.0%) | 77/1,042 (7.4%) |
+| MIMIC | AKI>=2 48h | Native | 28/235 (11.9%) | **GREY:** 15/134 (11.2%) |
+| MIMIC | AKI>=2 48h | Closest | **GREY:** 12/214 (5.6%) | **GREY:** 15/118 (12.7%) |
+| MIMIC | AKI>=2 48h | First | **GREY:** 3/164 (1.8%) | **GREY:** 7/106 (6.6%) |
+| MIMIC | AKI>=1 7d | Native | 486/1,674 (29.0%) | 426/1,214 (35.1%) |
+| MIMIC | AKI>=1 7d | Closest | 559/1,571 (35.6%) | 494/1,149 (43.0%) |
+| MIMIC | AKI>=1 7d | First | 627/1,545 (40.6%) | 518/1,126 (46.0%) |
+| MIMIC | AKI>=2 7d | Native | 71/347 (20.5%) | 53/202 (26.2%) |
+| MIMIC | AKI>=2 7d | Closest | 81/317 (25.6%) | 58/178 (32.6%) |
+| MIMIC | AKI>=2 7d | First | 95/313 (30.4%) | 59/180 (32.8%) |
+| eICU | AKI>=1 48h | Native | 61/454 (13.4%) | 65/422 (15.4%) |
+| eICU | AKI>=1 48h | Closest | 61/430 (14.2%) | 63/394 (16.0%) |
+| eICU | AKI>=1 48h | First | 52/421 (12.4%) | 50/393 (12.7%) |
+| eICU | AKI>=2 48h | Native | **GREY:** 9/64 (14.1%) | **GREY:** 7/53 (13.2%) |
+| eICU | AKI>=2 48h | Closest | **GREY:** 4/57 (7.0%) | **GREY:** 8/46 (17.4%) |
+| eICU | AKI>=2 48h | First | **GREY:** 6/46 (13.0%) | **GREY:** 5/39 (12.8%) |
+| eICU | AKI>=1 7d | Native | 152/485 (31.3%) | 135/442 (30.5%) |
+| eICU | AKI>=1 7d | Closest | 171/465 (36.8%) | 154/417 (36.9%) |
+| eICU | AKI>=1 7d | First | 186/464 (40.1%) | 173/421 (41.1%) |
+| eICU | AKI>=2 7d | Native | 26/104 (25.0%) | **GREY:** 19/88 (21.6%) |
+| eICU | AKI>=2 7d | Closest | 26/93 (28.0%) | 27/85 (31.8%) |
+| eICU | AKI>=2 7d | First | 30/96 (31.2%) | 24/81 (29.6%) |
+| IUH | AKI>=1 48h | Native | 52/293 (17.7%) | 72/301 (23.9%) |
+| IUH | AKI>=1 48h | Closest | 50/277 (18.1%) | 77/285 (27.0%) |
+| IUH | AKI>=1 48h | First | 45/268 (16.8%) | 60/282 (21.3%) |
+| IUH | AKI>=2 48h | Native | **GREY:** 4/46 (8.7%) | **GREY:** 0/49 (0.0%) |
+| IUH | AKI>=2 48h | Closest | **GREY:** 2/41 (4.9%) | **GREY:** 3/49 (6.1%) |
+| IUH | AKI>=2 48h | First | **GREY:** 1/29 (3.4%) | **GREY:** 0/38 (0.0%) |
+| IUH | AKI>=1 7d | Native | 93/288 (32.3%) | 125/295 (42.4%) |
+| IUH | AKI>=1 7d | Closest | 114/278 (41.0%) | 151/281 (53.7%) |
+| IUH | AKI>=1 7d | First | 115/273 (42.1%) | 152/282 (53.9%) |
+| IUH | AKI>=2 7d | Native | **GREY:** 17/68 (25.0%) | **GREY:** 19/67 (28.4%) |
+| IUH | AKI>=2 7d | Closest | 21/61 (34.4%) | 36/67 (53.7%) |
+| IUH | AKI>=2 7d | First | **GREY:** 19/58 (32.8%) | **GREY:** 19/59 (32.2%) |
+
+At 48h, MIMIC AKI>=1 has a small native treated-control excess in confirmed
+blips (14.2% vs 11.4%), preserved under closest-anchor (13.2% vs 10.5%) but
+nearly eliminated under first-of-day (8.0% vs 7.4%). Despite that elimination,
+the first-of-day DR association remains OR 1.87 and RD +0.114. At 7d, MIMIC
+isolated-blip fractions are consistently *higher in controls* than treated
+patients. Transient isolated highs therefore do not account for the sustained
+MIMIC treated-control difference.
+
+### Honest interpretation
+
+Equalizing ascertainment to one schedule-defined draw per patient-day produces
+only modest attenuation of MIMIC stage-1 AKI. On the additive DR scale, the
+MIMIC excess falls by 0.8-1.2 percentage points from an original 11.9-12.3
+percentage-point excess—roughly 7-10%—while about 90% persists. On the OR
+scale it remains 1.81/1.87 at 48h and 1.70/1.70 at 7d. eICU and IUH remain
+weak/near-null under the same rules, so MIMIC does not converge toward them.
+The small 48h treated excess in transient blips may represent some
+monitoring/timing contribution, but it disappears with first-of-day without
+materially changing the treatment association; at 7d, blips are not enriched
+in MIMIC treated patients. It is therefore not defensible to attribute the
+strong MIMIC stage-1 signal mainly to extra creatinine opportunities. The
+schedule sensitivity cannot prove causal injury or eliminate residual
+severity confounding, but the large majority of the observed MIMIC association
+survives genuinely surveillance-limited ascertainment.
+
+### Aggregate artifacts and gate
+
+Committed aggregates are:
+
+- `results/surveillance_limited_aki_{mimic,eicu,iuh}.csv`
+- `results/surveillance_limited_blip_{mimic,eicu,iuh}.csv`
+
+They contain PSM and DR OR/RD estimates with CIs/P values, event counts,
+evaluable pair counts, and sparse flags, plus arm-specific isolated-blip
+counts/fractions. No patient-level file or pair file left Tempest/Quartz.
+
+>>> RESULTS-GATE STOP. Entry 29 is ready for supervisor review; frozen v3.3 pairs and estimator remain unchanged. <<<
