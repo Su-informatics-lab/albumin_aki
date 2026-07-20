@@ -3106,3 +3106,152 @@ common-grid aggregate CSVs; no patient-level plot data, pair file, or
 spot-check file was copied from Tempest/Quartz.
 
 >>> RESULTS-GATE STOP. Dose modeling is blocked pending an independently validated administered-grams source; the completed gradient/meta results are ready for supervisor and clinician review. <<<
+
+---
+
+## Entry 26 — Supervisor synthesis of the data-science salvage; analysis freeze; take framing to clinicians  (2026-07-20, Claude/supervisor)
+
+Read Entry 25 in full and cross-checked its numbers against the committed CSVs. Codex did the right
+thing on every count, including the one that hurt (killing the dose model rather than shipping a
+five-fold-misclassified grams variable). This entry is the candid ledger and the decision, not a
+victory lap.
+
+### What the salvage actually bought us (candid)
+
+**Better than before.** Going in, the honest standing was "MIMIC strong, IUH partial, eICU flat/
+reversed per-stratum." The continuous-eGFR spline overturns the worst part of that: **eICU does carry
+a low-reserve gradient** (OR ~2.0 at eGFR 30 → ~0.7 at eGFR 90, 48h) that the three coarse bins hid.
+So the effect-modification **direction now replicates in all three databases, each individually
+significant** — MIMIC interaction P≈9e-38, eICU P≈7e-7, IUH P≈3e-6 (48h). That is the strongest form
+of this finding we have had, and it is the mg_aki template exactly: the modifier replicates even where
+the main effect wobbles.
+
+**Not fixed, and I will not pretend otherwise.**
+1. **The dose/mechanism story is dead in these data.** `inputevents.amount` is infused volume, but the
+   5%/25% item label is unreliable (500-mL events filed under "Albumin 25%" that pharmacy confirms were
+   5%; `amount × 0.25` overstates those five-fold). Grams are not recoverable at adequate coverage in
+   MIMIC or IUH; eICU never had it. So there is **no osmotic-nephrosis dose-response backbone** — the
+   mechanistic upgrade we hoped Yan's insight would unlock is not available. Neither a positive nor a
+   null dose claim is supportable, and none will be made.
+2. **Magnitude heterogeneity is very high.** Pooled interaction OR 0.514 [0.405, 0.652] at 48h and
+   0.565 [0.443, 0.721] at 7d, but **I² ≈ 82%** (RD I² 90–92%). Same direction, three different curves.
+   Codex's own words: the pooled number is "a summary of non-identical gradients, not evidence that the
+   three databases share one transportable effect-modification curve." A meta-analytic reviewer will
+   press exactly here, and they will be right to.
+3. **IUH remains balance-limited** (Entry 23) — its gradient is directional but rests on the weakest
+   leg, and the imbalanced covariates were only rescued doubly-robustly.
+4. Everything is observational and confounded-by-indication (sicker patients get albumin).
+
+### Addendum (2026-07-20, same day) — three-database forest exposed a positive negative control
+
+Built `results/figures/fig_forest_3db_aki_mortality.png` (MIMIC/eICU/IUH × Overall/G1/G2/G3+ ×
+AKI≥1 48h, AKI≥1 7d, 7d mortality; DR; <20-event cells greyed). Two candid corrections to the entry
+above and to `MEETING_ONEPAGER.md`:
+
+1. **Mortality is an important safety OUTCOME, not a negative control (Haining clinical correction).**
+   Severe AKI causes death, so mortality is on the causal path — a real secondary outcome, not a
+   falsification test; the "negative control" framing I introduced was wrong and is retracted. DR 7-day
+   mortality is higher with albumin in eICU (1.62) and IUH (1.93; hospital 1.87), borderline in MIMIC
+   (all-cause 1.41; in-hospital 0.79). This reflects confounding by indication (albumin marks sicker
+   patients — the colloid-vs-crystalloid severity confound), genuine harm, or both; observational data
+   cannot separate them. My first one-pager's "no consistent signal (0.78–1.41)" cherry-picked the
+   friendliest pair and is corrected. Handle via E-value / quantitative bias analysis, not a
+   falsification claim. Also: the mechanism is broader than eGFR (the colloid-vs-crystalloid AKI debate);
+   eGFR is one axis, not the whole story — stop over-anchoring the narrative on it.
+2. **The coarse eGFR bins only replicate cleanly in MIMIC.** MIMIC is monotone (48h 1.58→1.99→2.51;
+   7d 1.49→1.80→2.53). eICU is non-monotone (G3+ falls to ~1.1). IUH 48h is reversed (G1 highest, 2.28);
+   IUH 7d is monotone. The cross-DB gradient lives in the *continuous spline*, not the 3-bin view — the
+   bins are genuinely noisy outside MIMIC. Report the spline, not the bins, for eICU/IUH.
+
+Principled next step to offer the clinicians (not run yet — analysis stays frozen): **E-value /
+quantitative bias analysis** for unmeasured confounding on the AKI estimate — state how strong an
+unmeasured severity confounder would need to be to explain the association. Confronts the confounding
+question directly rather than hoping a reviewer misses it.
+
+### The defensible headline (what we can actually claim)
+
+*Early post-cardiac-surgery albumin exposure is associated with higher AKI risk, and the association is
+modified by baseline renal reserve — concentrated at low eGFR, attenuating to null or protective at
+preserved eGFR. The direction replicates across three independent databases (each interaction P<1e-5),
+strongest and cleanest in MIMIC, with substantial between-database heterogeneity in magnitude.
+Hypothesis-generating; not a dose-mechanism claim and not causal.*
+
+That is a real, honest **effect-modification** paper. It is **not** JAMA/NEJM: no clean mechanism, no
+dose-response, high heterogeneity, observational. It is a solid **specialty-journal** paper — the
+realistic targets are the critical-care/nephrology/cardiac-surgery tier (e.g., *Critical Care*,
+*CJASN* / *Kidney International Reports*, *Anesthesiology*, *JTCVS*). Framing and target belong with the
+clinicians, not decided unilaterally here.
+
+### Decision: freeze the analysis
+
+We are at the honest floor of what these data support. The frozen v3.3 estimator has now been asked the
+main question (eGFR-stratified), the sweep question (covariates), the replication question (3 DBs +
+meta), the mechanism question (dose — answered "not identifiable"), and the shape question (spline).
+**Running anything further to move a borderline number would be estimator-shopping — LESSONS.md §9, the
+exact error that nearly sank mg_aki.** So: no re-selection, no re-matching, no new estimators. The next
+move is writing and a clinician conversation, not more models.
+
+The one place more *data work* is legitimately open — not shopping — is **fixing IUH covariate balance**
+(the weakest leg), because better balance there would make the third replication honest rather than
+doubly-robust-rescued. That is a candidate to raise with the team, not a unilateral rerun.
+
+### Next actions (supervisor)
+
+Built `MEETING_ONEPAGER.md` for the Yan/Eadon/Meng conversation: the honest bottom line, the numbers,
+what died, two framing options, limitations, and the specific decisions we need from them (headline
+framing, target journal, and whether an IUH re-balance is worth one more cycle). No Codex task is queued
+— Codex stays at the results-gate STOP until the clinicians set direction.
+
+>>> NO CODEX TASK QUEUED. Analysis frozen at v3.3. Awaiting clinician framing/venue decision before manuscript scaffold. <<<
+
+---
+
+## Entry 27 — Why MIMIC breaks away: cross-ETL forensic audit + surveillance-bias debug  (2026-07-20, Claude/supervisor)
+
+Haining's read of `fig_forest_3db_endpoints_overall.png`: eICU and IUH agree (weak/null AKI, elevated
+mortality); MIMIC is the outlier (strong graded AKI, neutral mortality). His hypothesis: a MIMIC-specific
+problem in *our* pipeline (ETL/processing), not the design. Ran a read-only forensic audit of the AKI
+staging, baseline anchoring, post-T0 window, missing-outcome coding, and mortality across all three
+ETLs (subagent, full file:line trace).
+
+### Finding: it is NOT a definitional bug — the code is identical; it is a data-property interaction
+
+The AKI stage rule, at-match baseline (`max_at_latest_before`, last Cr strictly `< T0`, both arms),
+the 48h/7d peak-`any()`-over-window, the missing-post-T0→non-event(0) rule, and the death windowing all
+live in ONE shared R engine (`R/causal_helpers.R`) driven by `02_psm.R`/`03_hte.R` with a `{mimic|eicu|
+iuh}` arg. IUH provably runs the same scripts (`iuh/run_main.sbatch`). So no database has a divergent
+definition. The MIMIC outlier is produced by MIMIC's *input data properties* interacting with the
+(shared) sampling-sensitive AKI rule.
+
+### Ranked our-side causes (evidence in committed CSVs)
+
+1. **Creatinine sampling density × peak-over-window × non-event coding (INFLATES mild AKI in MIMIC;
+   DEFLATES it in eICU/IUH).** MIMIC misses post-T0 Cr for **0.07%** of patients
+   (`probe_nopost_cr_pooled_mimic.csv`); eICU misses **5.6% treated / 3.0% control** at 48h
+   (`probe_nopost_cr_pooled_eicu.csv`) — differential toward the treated arm, biasing eICU *toward null*.
+   Because AKI = `any()` stage over the window, a densely-sampled ICU detects every transient ≥0.3/≥1.5×
+   bump, while sparse databases code missing labs as AKI=0. MIMIC's excess is concentrated exactly in
+   **stage 1** (`hte_probe_stage_distribution_mimic.csv`: 48h stage1 30.1% trt vs 21.9% ctl; stage3
+   0.96% vs 0.81% — essentially equal). A big mild-AKI signal that vanishes at stage 3 and at death is
+   the fingerprint of ascertainment, not injury.
+2. **Baseline pinned to the post-fluid/post-CPB hemodilution nadir (INFLATES mild AKI).** Same rule, but
+   albumin/fluid loading transiently dilutes Cr, so the treated arm's last-pre-T0 Cr can be an
+   artificially low nadir; the subsequent return-to-baseline is then mislabeled as a creatinine "rise."
+   MIMIC's dense sampling makes it far more likely to catch that nadir than sparse databases.
+3. **In-hospital-only death; MIMIC's `patients.dod` (out-of-hospital deaths) is unused** — may relatively
+   deflate MIMIC 7-day mortality if MIMIC LOS is shorter (more 7-day deaths land post-discharge, missed).
+   Symmetric-by-design, not a code asymmetry, but testable.
+4. eICU PS drops vaso/MAP/vent (under-adjustment) — context only; it would *inflate* eICU, opposite to
+   what we see, so it does not explain eICU's low AKI.
+5. IUH Cr units assumed mg/dL, not guarded (absolute 0.3/4.0 thresholds are unit-dependent) — low risk.
+
+### The decisive test (surveillance harmonization) — queued for Codex
+
+Re-ascertain AKI in all three DBs under a COMMON sampling scheme (one Cr/day; and a measurement-count
+match) and see whether MIMIC's albumin→AKI OR collapses toward eICU/IUH. Plus: Cr-draw counts per
+patient by DB AND by arm (differential surveillance within MIMIC?); baseline-nadir check (is treated
+baseline a hemodilution dip vs the patient's own earlier Cr?); and MIMIC mortality re-ascertained with
+`patients.dod`. If the OR collapses under harmonized sampling, the "MIMIC harm" is largely an
+ascertainment artifact and the honest cross-DB story is null/weak — which we report.
+
+>>> CODEX TASK QUEUED (debug, read-only probes): surveillance-harmonization battery. Aggregate CSVs only; patient-level stays remote. Report Entry 28, STOP. <<<
