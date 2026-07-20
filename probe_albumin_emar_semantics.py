@@ -35,7 +35,9 @@ def main() -> None:
     args = parse_args()
     # This file is deliberately an unvalidated candidate used only to locate
     # cases where volume-times-item-label produces implausible apparent grams.
-    dose = pd.read_csv(args.results / "did_albumin_dose_mimic.csv")
+    dose = pd.read_csv(
+        args.results / "did_albumin_dose_unvalidated_candidate_mimic.csv"
+    )
     top = dose.nlargest(args.n_courses, "albumin_grams_24h")[["pid"]].copy()
     top["case_id"] = [f"TAIL_{chr(65 + i)}" for i in range(len(top))]
 

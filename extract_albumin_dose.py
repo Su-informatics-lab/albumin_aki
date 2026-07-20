@@ -236,13 +236,20 @@ def main() -> None:
         )
     args.results.mkdir(parents=True, exist_ok=True)
     dose = extract_mimic(args) if args.database == "mimic" else extract_iuh(args)
-    dose.to_csv(args.results / f"did_albumin_dose_{args.database}.csv", index=False)
+    dose.to_csv(
+        args.results / f"did_albumin_dose_unvalidated_candidate_{args.database}.csv",
+        index=False,
+    )
     distribution, provenance = summarize(dose, args.database)
     distribution.to_csv(
-        args.results / f"albumin_dose_distribution_{args.database}.csv", index=False
+        args.results
+        / f"albumin_dose_unvalidated_candidate_distribution_{args.database}.csv",
+        index=False,
     )
     provenance.to_csv(
-        args.results / f"albumin_dose_provenance_{args.database}.csv", index=False
+        args.results
+        / f"albumin_dose_unvalidated_candidate_provenance_{args.database}.csv",
+        index=False,
     )
     print(distribution.to_string(index=False))
     print(provenance.to_string(index=False))

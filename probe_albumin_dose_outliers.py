@@ -23,7 +23,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    dose = pd.read_csv(args.results / "did_albumin_dose_mimic.csv")
+    dose = pd.read_csv(
+        args.results / "did_albumin_dose_unvalidated_candidate_mimic.csv"
+    )
     top = dose.nlargest(8, "albumin_grams_24h").copy()
     top["case_id"] = [f"TAIL_{chr(65 + i)}" for i in range(len(top))]
 
