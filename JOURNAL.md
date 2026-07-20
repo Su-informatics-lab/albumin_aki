@@ -2647,3 +2647,69 @@ crosstab, pooled risk-set/balance/binary results, and balance probe. Patient
 tables and `*pairs*` remain ignored on Quartz.
 
 >>> GUARD-RAIL STOP. Do not resume IUH eGFR-stratified/reported-eGFR/HTE jobs or alter the frozen PS until the balance decision is approved. <<<
+
+---
+
+## Entry 21 — Supervisor review of Entry 19 (HTE sweep) + Entry 20 (IUH): approve fixes; judge IUH by the interaction  (2026-07-19, Claude)
+
+Both stops were correct. Reads and decisions:
+
+**HTE sweep (Entry 19) — the "two-variable" hypothesis is answered: it is essentially ONE renal-reserve
+axis, not a genuine second modifier.** Many candidates survive FDR (eGFR, baseline Cr, age, hemoglobin,
+CKD, ventilation, HF, DM, HTN, sex) but they are **collinear expressions of the same reserve/severity
+axis** — q<.05 alone is not independence. The mandatory competing-modifier tests settle it: **eGFR × alb_cat
+3-way is NOT significant** (q .26–.51 → baseline albumin does not create a crossed phenotype here), and
+**eGFR × baseline-Cr is strong but eGFR survives jointly** (OR-interaction 0.24–0.26) → eGFR is not a mere
+Cr proxy, they are collinear. Forest ranks eGFR #1. So the honest, cleaner story is a **single robust
+renal-reserve modifier**, not a fragile 2-way. The gradient also survives never-treated-only controls
+(P-A: mortality null, AKI interaction OR 0.415/0.464) and competing-risk (P-B), and the mortality anomaly
+is confirmed crossover/selection (P-C). Dose-response within treated (per 25 g, OR ~1.13) adds mechanism.
+
+**Approve the two Entry 19 integrity repairs** (no re-match, no PS change): (1) apply the frozen
+horizon-specific crossover censor to P-F and rerun (4,690/4,202, not 5,428); (2) make the forest folds
+**patient-disjoint** (connected components over reused patient IDs), or demote the forest to descriptive
+variable-importance + PDP with **no omnibus P**. Both are exploratory; the main finding does not hinge on them.
+
+**IUH (Entry 20) — key call.** (a) Haining's eGFR-from-baseline-SCr worry is **resolved**: computed vs IUH
+lab eGFR r=0.930, G1/G2/G3+ 92% concordant, adjacent-boundary only — the stratification is not a formula
+artifact (eGFR and baseline Cr remain one axis, as above). (b) **Do NOT read the IUH pooled result as
+non-replication.** The pooled match **failed balance specifically on eGFR** (matched SMD 0.247; matched
+treated median eGFR 82.4 vs control 77.6 — the PS pulled controls to a lower-eGFR subset), so the pooled
+OR is uninterpretable and the PSM-vs-DR divergence (0.97 vs 1.21) is that residual eGFR imbalance. Our main
+analysis is the **eGFR-stratified/interaction**, where eGFR is removed from the PS and matched *within*
+strata — which directly fixes that imbalance — and per LESSONS §1 the pooled main effect can be null while
+the gradient replicates (the mg story).
+
+**Decision:** authorize IUH to continue to the **eGFR-stratified + HTE** analysis (plus the pre-registered
+**IUH-lab-reported-eGFR** within-stratum sensitivity, independent of our computed eGFR). Keep the frozen
+estimator (no flexible PS, no re-match, no caliper change). Report PSM **and** DR transparently. **Judge IUH
+replication by the interaction sign/magnitude (OR per +eGFR < 1 = harm rising as reserve falls), NOT the
+pooled OR.** If the interaction is directionally concordant → external validation supports the gradient even
+with a null pooled effect; if flat/reversed → honestly downgrade IUH ("pooled inconclusive; small,
+imbalanced; gradient not replicated") and lean on MIMIC + eICU-direction + limitations. Report the IUH
+pooled balance failure as a stated limitation regardless.
+
+>>> APPROVED: Entry 19 P-F + forest integrity repairs; IUH continue to eGFR-stratified + HTE + lab-eGFR sensitivity, frozen estimator, PSM+DR transparent, judged by the interaction (downgrade-not-reselect). Report Entry 22; STOP. <<<
+
+---
+
+## Entry 21b — Candid status (no spin): external replication is NOT established  (2026-07-19, Claude)
+
+For the record, stated plainly so no one (including me) reads this file optimistically:
+
+- **IUH has not replicated.** The only IUH result that exists — the pooled analysis — **failed** (balance
+  failed on eGFR, matched SMD 0.247; estimate null/ambiguous, PSM 0.97 / DR 1.21). The eGFR-stratified/HTE
+  analysis is **not yet run**, so there is currently **no positive external replication of the gradient**.
+- **eICU is not a clean replication either** — failed mortality falsification, under-adjusted (no vaso/MAP),
+  differential post-Cr missingness; weak stage-≥1 direction only. It is a compromised check, not confirmation.
+- **Therefore the finding is, as of now, effectively single-database (MIMIC).** The strong within-MIMIC
+  robustness (never-treated controls, competing-risk, alb_cat 3-way ns, dose-response) is **internal** and is
+  **not** the same as external replication.
+- The planned IUH eGFR-stratified run is a **fair test, not a rescue** (~50/50: stratification removes the
+  eGFR imbalance, but n=1,375 across 3 strata is small and IUH is a different site). Go in accepting either result.
+- **If eICU + IUH do not confirm the gradient, do not force it (LESSONS §1).** The honest write-up is then
+  "observed in MIMIC, not confirmed externally" — hypothesis-generating / lower-tier / cautious, not a
+  multi-database causal claim. Even the MIMIC result is observational with residual confounding-by-indication
+  and a small unresolved 48h mortality blip.
+
+Prior supervisor summaries led with the MIMIC strength and under-weighted this. This entry is the correction.
