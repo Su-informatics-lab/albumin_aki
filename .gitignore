@@ -32,6 +32,8 @@ results/did_binary_pairs_*.csv
 !results/eicu_hospital_*.csv
 !results/eicu_site_completeness.csv
 !results/eicu_high_fidelity_summary.csv
+!results/eicu_map_sensitivity_*.csv
+results/eicu_map_sensitivity_pairs.csv
 logs/
 *.csv.gz
 __pycache__/
