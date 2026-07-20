@@ -432,6 +432,11 @@ estimate_pair_subset <- function(pairs, idx, all_pts, violations, group_type,
     valid <- !is.na(y_t) & !is.na(y_c)
     e_t <- sum(y_t[valid])
     e_c <- sum(y_c[valid])
+    metadata_row <- if (length(metadata)) {
+      as.data.frame(metadata, stringsAsFactors = FALSE)
+    } else {
+      data.frame(row.names = 1L)
+    }
     rows[[length(rows) + 1L]] <- cbind(
       data.frame(
         db = "EICU", group_type = group_type,
@@ -440,7 +445,7 @@ estimate_pair_subset <- function(pairs, idx, all_pts, violations, group_type,
         sparse_lt20 = e_t < 20 || e_c < 20,
         hospital_eligibility = sum(valid) >= 100 && e_t >= 20 && e_c >= 20
       ),
-      as.data.frame(metadata, stringsAsFactors = FALSE),
+      metadata_row,
       est
     )
   }
