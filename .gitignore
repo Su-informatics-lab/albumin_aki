@@ -27,6 +27,9 @@ results/did_binary_pairs_*.csv
 !results/salvage_egfr_*.csv
 !results/salvage_interaction_meta.csv
 !results/surveillance_*.csv
+!results/confounding_*.csv
+!results/generalizability_*.csv
+!results/eicu_hospital_*.csv
 logs/
 *.csv.gz
 __pycache__/
