@@ -12,9 +12,11 @@ High-fidelity site (prespecified before the probe):
   * best-effort vasopressor state recoverable for >=80% of both arms; and
   * clean time-resolved ventilation state recoverable for >=80% of both arms.
 
-Absence of a raw record is never interpreted as an off state.  In particular,
-infusionDrug has point observations but no stop time, so its contribution is
-explicitly labelled best-effort rather than an exact continuous interval.
+Unconditional absence of a raw record is never interpreted as an off state.
+For vasopressors only, a usable near-T0 infusion-interface record for another
+drug permits a best-effort off classification when no pressor is charted;
+infusionDrug has no stop time, so this remains explicitly non-exact.  For
+ventilation, absence is never classified as off.
 """
 
 from __future__ import annotations
@@ -214,10 +216,10 @@ def scan_vent(root: Path, keep: set[int], t0_min: pd.Series):
         prior24 = off.notna() & (off <= t0) & (off >= t0 - VENT_EXPLICIT_LOOKBACK_MIN)
         onoff = label.str.contains(r"vent.*on.?off|on.?off.*vent", regex=True)
         on = value.str.contains(
-            r"^(on|yes|started|start|continued|continue|1)$", regex=True
+            r"^(?:on|yes|started|start|continued|continue|1)$", regex=True
         )
         off_state = value.str.contains(
-            r"^(off|no|stopped|stop|discontinued|discontinue|0)$", regex=True
+            r"^(?:off|no|stopped|stop|discontinued|discontinue|0)$", regex=True
         )
         add_ids(explicit_on, pid[prior24 & onoff & on])
         add_ids(explicit_off, pid[prior24 & onoff & off_state])

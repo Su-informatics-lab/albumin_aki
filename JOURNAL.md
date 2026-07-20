@@ -3875,3 +3875,181 @@ heterogeneity are more strongly supported than a universal albumin effect.
 No pair or patient-level file left Tempest/Quartz.
 
 >>> RESULTS-GATE STOP. Entry 31 is ready for supervisor review; frozen v3.3 pairs and estimator remain unchanged. <<<
+
+---
+
+## Entry 32 — Supervisor closing synthesis of the MIMIC-outlier investigation  (2026-07-20, Claude/supervisor)
+
+The Entry 27–31 arc answers Haining's question ("is MIMIC wrong / a single-center quirk?") as completely
+as the data allow. Verified all Entry 31 numbers against the committed CSVs.
+
+**What we established, in order:**
+1. Not a definition/ETL bug — AKI, baseline, window, mortality are identical shared code across DBs (E27).
+2. Not our measurement artifact — the MIMIC AKI≥1 signal survives sampling density, differential-arm
+   surveillance, missing-coding, hemodilution-nadir, and a scheduled single-draw-per-day (E28–29; DR OR
+   1.88→1.81/1.87).
+3. **Confounding + practice heterogeneity, NOT a causal generalizable effect (E31).** E-value ≈ 2.0–2.3
+   (near-null CI ≈ 1.9–2.2) — moderate, but *reachable* given the enormous pre-match selection in MIMIC:
+   vasopressor SMD **0.70** (58.5% vs 26.0%), MAP **−0.58**, ventilation **0.33**, pre-T0 RBC **0.50**
+   (13.6% vs 1.0%). eICU hospital 420 (large teaching, NE) shows a MIMIC-magnitude DR OR 3.76 and the NE
+   group 2.30, so MIMIC is **not** a wholly unique artifact — but the pooled hospital meta includes null
+   (DR 1.31 [0.86, 1.99], I² 71%), and only ~2–3% of frozen pairs are same-hospital, so 420 is a
+   heterogeneity signal, not independent replication. Populations differ materially (albumin timing 9.9h
+   MIMIC vs 3.3h IUH; surgery mix; baseline eGFR).
+
+**Calibrated verdict:** we cannot defend a causal, generalizable "albumin → AKI" claim. The most
+supported reading is strong confounding-by-indication plus center/practice heterogeneity. This is a
+rigorous *negative/cautionary* result, not a failure — and the multi-database + surveillance +
+E-value + hospital-heterogeneity work is exactly the rigor a cautionary paper needs.
+
+**Analysis is now CLOSED.** Further probing to rescue a causal signal would be estimator/analysis
+shopping (LESSONS §9). Strategic options for Haining + clinicians:
+- (1) Take the verdict to Su/Yan/Eadon first (recommended) with the rewritten one-pager.
+- (2) Reframe as a rigorous cautionary / non-replication + confounding paper (Crit Care / J Clin Epi /
+  npj Digit Med).
+- (3) Pivot to a target-trial-emulation with an **active crystalloid comparator** restricted to
+  resuscitation-indicated patients — the correct causal fix for confounding-by-indication; a *new* study.
+- (4) Pause.
+
+Rewrote `MEETING_ONEPAGER.md` to this honest post-debug state.
+
+>>> NO CODEX TASK QUEUED. Analysis closed pending Haining's strategic decision. <<<
+
+---
+
+## Entry 34 — eICU raw-table site completeness gate (2026-07-20, Codex)
+
+### Scope and provenance
+
+This is Step 1 only. The probe was read-only on the eICU cardiac-surgery
+source cohort feeding frozen v3.3: 2,298 albumin-treated and 16,778 eligible
+never-treated controls across 76 hospitals. It did not fit a propensity score
+or outcome model, did not rematch, and did not alter the exposure, baseline,
+censor, or frozen pairs. The synchronized journal ended at Entry 32 when this
+run began; the user's complete Step-1 instruction was therefore treated as
+the authoritative specification for the requested Entry-33 task.
+
+Patient membership and each patient's already-frozen index were read from
+`did_all_eicu.csv`: first albumin for treated patients and
+`cr_ref_early_offset_h` for controls, matching the index convention that
+produced the prior control-MAP completeness diagnostic. Hospital came from
+raw `patient.csv.gz`. All completeness indicators were re-derived from raw
+eICU tables:
+
+- MAP: `vitalPeriodic.systemicmean` plus
+  `vitalAperiodic.noninvasivemean`, valid 20-200 and strictly before T0.
+- Vasopressor: `infusionDrug` timing/rates plus explicit active IV pressor
+  intervals in `medication`. Because `infusionDrug` has no stop field, a
+  usable rate/timing row for any infusion in the 6h before T0 establishes a
+  best-effort interface; it is not an exact continuous interval. A pressor
+  rate or active medication interval establishes on. Unconditional absence
+  is not treated as off.
+- Ventilation: explicit on/off in `respiratoryCharting`, a respiratory setting
+  within 6h before T0, or a `respiratoryCare` interval spanning T0. A
+  `treatment` ventilation/intubation event is reported as support only and is
+  not counted as clean state reconstruction. Missing ventilation records are
+  never coded off.
+
+The high-fidelity rule was fixed before seeing results: >=30 treated, and
+MAP, best-effort vaso, and clean time-resolved ventilation each recoverable
+in >=80% of **both** arms.
+
+Tempest Slurm `4263328` stopped before scanning when a schema assertion found
+that `noninvasivemean` is not in `vitalPeriodic`; the field is correctly in
+`vitalAperiodic`, exactly as specified. After this field-list-only repair,
+job `4263329` completed with exit 0 in 1m55s (peak RSS 3.28 GB). No
+patient-level intermediate was written.
+
+### Overall raw-table completeness
+
+| Measure | Treated | Control | Interpretation |
+|---|---:|---:|---|
+| MAP: periodic systemic mean | 1,746/2,298 (76.0%) | 6,456/16,778 (38.5%) | Exactly reproduces the prior periodic-only control bottleneck |
+| MAP: aperiodic non-invasive mean | 1,497/2,298 (65.1%) | 12,986/16,778 (77.4%) | Important source omitted from the old derived stream |
+| MAP: either raw source | 2,067/2,298 (89.9%) | 14,944/16,778 (89.1%) | MAP is no longer the overall bottleneck |
+| Any usable infusion-interface row within 6h | 842/2,298 (36.6%) | 3,831/16,778 (22.8%) | Site-dependent point schema |
+| Pressor rate within 6h | 639/2,298 (27.8%) | 1,580/16,778 (9.4%) | Positive pressor evidence only |
+| Active IV pressor medication interval at T0 | 537/2,298 (23.4%) | 961/16,778 (5.7%) | Explicit interval support |
+| Best-effort vaso state recoverable | 1,147/2,298 (49.9%) | 4,383/16,778 (26.1%) | Still a major control-arm bottleneck |
+| Explicit respiratory on/off state | 153/2,298 (6.7%) | 69/16,778 (0.4%) | Rarely charted explicitly |
+| Respiratory setting near T0 | 1,245/2,298 (54.2%) | 4,401/16,778 (26.2%) | Clean positive ventilation evidence |
+| Respiratory-care interval spanning T0 | 1,267/2,298 (55.1%) | 4,170/16,778 (24.9%) | Clean positive ventilation evidence |
+| Treatment event support (not in clean definition) | 873/2,298 (38.0%) | 3,657/16,778 (21.8%) | Point event cannot establish off state |
+| Clean time-resolved vent state recoverable | 1,498/2,298 (65.2%) | 5,536/16,778 (33.0%) | Second major control-arm bottleneck |
+
+Thus the old approximately 38% control MAP value was real for
+`vitalPeriodic.systemicmean`, but incomplete as a raw-table audit. Adding the
+prespecified aperiodic NIBP source raises combined control MAP to 89.1%. This
+is a completeness finding only and does not revise any frozen analysis.
+
+### Per-site completeness
+
+The committed `eicu_site_completeness.csv` contains all 76 hospitals, both-arm
+numerators/denominators for every component above, four qualification flags,
+and frozen-pair cross-references. The table below shows all 20 hospitals with
+at least 30 albumin-treated patients. Values are treated/control. `Frozen`
+is pair rows indexed by treated hospital / unique treated / unique controls
+whose own hospital is that site.
+
+| Hospital | Source N T/C | MAP T/C | Best-effort vaso T/C | Clean vent T/C | Frozen | Qualifies |
+|---:|---:|---:|---:|---:|---:|:---:|
+| 63 | 30 / 3 | 96.7% / 100.0% | 3.3% / 0.0% | 90.0% / 66.7% | 28 / 28 / 0 | no |
+| 73 | 279 / 889 | 79.9% / 94.6% | 6.8% / 3.1% | 66.3% / 17.5% | 235 / 235 / 50 | no |
+| 142 | 155 / 180 | 92.3% / 94.4% | 81.9% / 61.7% | 79.4% / 42.2% | 140 / 140 / 17 | no |
+| 148 | 61 / 453 | 93.4% / 87.0% | 75.4% / 23.8% | 62.3% / 13.9% | 47 / 47 / 22 | no |
+| 152 | 57 / 578 | 94.7% / 85.1% | 75.4% / 17.0% | 71.9% / 18.7% | 41 / 41 / 27 | no |
+| 165 | 39 / 257 | 94.9% / 87.5% | 74.4% / 27.6% | 64.1% / 15.6% | 29 / 29 / 14 | no |
+| 167 | 81 / 506 | 97.5% / 90.5% | 74.1% / 21.5% | 60.5% / 12.1% | 50 / 50 / 24 | no |
+| 176 | 89 / 639 | 94.4% / 87.6% | 68.5% / 23.9% | 53.9% / 10.0% | 63 / 63 / 31 | no |
+| 195 | 125 / 217 | 96.0% / 94.5% | 70.4% / 39.2% | 0.0% / 0.0% | 114 / 114 / 42 | no |
+| 197 | 55 / 341 | 100.0% / 97.4% | 50.9% / 22.9% | 0.0% / 0.0% | 38 / 38 / 25 | no |
+| 198 | 106 / 328 | 97.2% / 91.5% | 60.4% / 25.6% | 0.0% / 0.0% | 93 / 93 / 41 | no |
+| 199 | 53 / 128 | 73.6% / 80.5% | 52.8% / 32.0% | 73.6% / 96.1% | 39 / 39 / 23 | no |
+| 206 | 37 / 29 | 24.3% / 55.2% | 21.6% / 24.1% | 97.3% / 72.4% | 30 / 30 / 10 | no |
+| 227 | 84 / 310 | 83.3% / 93.5% | 0.0% / 0.0% | 79.8% / 44.2% | 63 / 63 / 33 | no |
+| **243** | **58 / 43** | **96.6% / 97.7%** | **94.8% / 95.3%** | **96.6% / 86.0%** | **54 / 54 / 4** | **YES** |
+| 248 | 174 / 405 | 95.4% / 93.8% | 54.0% / 27.4% | 74.1% / 33.3% | 162 / 162 / 31 | no |
+| 252 | 138 / 398 | 98.6% / 91.7% | 42.0% / 23.6% | 71.7% / 32.7% | 123 / 123 / 31 | no |
+| 413 | 198 / 268 | 88.4% / 94.8% | 1.5% / 1.1% | 73.2% / 24.3% | 184 / 184 / 15 | no |
+| 420 | 185 / 357 | 99.5% / 98.3% | 94.6% / 73.7% | 89.7% / 47.9% | 177 / 177 / 39 | no |
+| 443 | 75 / 453 | 82.7% / 77.9% | 25.3% / 5.1% | 78.7% / 50.3% | 56 / 56 / 47 | no |
+
+Across all 76 hospitals, 29 pass MAP in both arms, six pass best-effort vaso,
+two pass clean vent, and only hospital 243 passes all three. Twenty hospitals
+meet the treated-N threshold; only 16 of those pass MAP. Hospital 420 is the
+most clinically relevant near-miss by size and prior heterogeneity signal,
+but misses prespecified control thresholds for vaso (73.7%) and especially
+vent (47.9%); it was not rescued by threshold relaxation.
+
+### Qualifying subset and go/no-go assessment
+
+The qualifying list contains **hospital 243 only**. Its source cohort has
+58 treated and 43 controls (101 total). It contributes 54 frozen pair rows
+and 54 unique treated patients. Across the entire frozen match only four
+control patients come from hospital 243, and **none** of hospital 243's 54
+treated-site pair rows has a same-hospital control; all 53 unique matched
+controls for those rows are external to site 243 and do not inherit its data
+fidelity. This reinforces the prior finding that the frozen eICU match is
+overwhelmingly cross-hospital.
+
+**Honest power/worth-running line: NO-GO for Step 2 as a formal
+full-covariate re-analysis.** One site with 58 treated and only 43 eligible
+same-site controls is not an adequately powered high-fidelity eICU subset,
+and the existing cross-hospital frozen controls cannot supply the three site-
+dependent covariates. Running an outcome model would produce a fragile
+single-site sensitivity rather than credible multicenter replication.
+
+### Aggregate artifacts and gate
+
+- `results/eicu_site_completeness.csv` — all 76 sites and all component
+  numerators, denominators, rates, qualification flags, and frozen-pair
+  cross-references.
+- `results/eicu_high_fidelity_summary.csv` — qualifying site list and pooled
+  source/frozen sample counts.
+
+Aggregate QC passed: site counts sum to 2,298 treated and 16,778 controls;
+both hospital-indexed frozen pair counts sum to 1,949; the qualification flag
+was independently recomputed from its component thresholds; and neither CSV
+contains a patient identifier.
+
+>>> STEP-1 GATE STOP. Entry 34 recommends NO-GO for a Step-2 full-covariate eICU outcome analysis unless the supervisor explicitly accepts a small, single-site exploratory sensitivity. <<<

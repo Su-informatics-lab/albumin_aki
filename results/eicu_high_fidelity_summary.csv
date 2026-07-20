@@ -1,0 +1,2 @@
+n_sites_total,n_sites_qualifying,qualifying_hospitalids,pooled_n_treated,pooled_n_control,pooled_frozen_pair_rows_by_treated_site,pooled_frozen_unique_treated,pooled_frozen_unique_control,map_threshold_both_arms,vaso_best_effort_threshold_both_arms,vent_clean_threshold_both_arms,minimum_albumin_treated,control_index_definition,treated_index_definition,model_fit
+76,1,243,58,43,54,54,53,0.8,0.8,0.8,30,cr_ref_early_offset_h,first albumin offset,False
