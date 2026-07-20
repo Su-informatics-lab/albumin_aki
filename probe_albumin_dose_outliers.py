@@ -69,7 +69,7 @@ def main() -> None:
               BETWEEN c.alb_offset_h - 1.0 / 3600.0 AND c.alb_offset_h + 24
         ORDER BY t.case_id, ie.starttime, ie.itemid
         """).df()
-    print("TOP EIGHT CORRECTED-DOSE COURSES (IDs suppressed)")
+    print("TOP EIGHT UNVALIDATED CANDIDATE COURSES (IDs suppressed)")
     print(events.to_string(index=False))
 
     pairs = pd.read_csv(
@@ -83,11 +83,11 @@ def main() -> None:
             {
                 "population": population,
                 "n": len(x),
-                "grams_gt_100": int((x.albumin_grams_24h > 100).sum()),
-                "grams_gt_150": int((x.albumin_grams_24h > 150).sum()),
-                "grams_gt_250": int((x.albumin_grams_24h > 250).sum()),
+                "candidate_grams_gt_100": int((x.albumin_grams_24h > 100).sum()),
+                "candidate_grams_gt_150": int((x.albumin_grams_24h > 150).sum()),
+                "candidate_grams_gt_250": int((x.albumin_grams_24h > 250).sum()),
                 "volume_gt_2000ml": int((x.albumin_volume_ml_24h > 2000).sum()),
-                "max_grams": x.albumin_grams_24h.max(),
+                "max_candidate_grams": x.albumin_grams_24h.max(),
                 "max_volume_ml": x.albumin_volume_ml_24h.max(),
             }
         )
