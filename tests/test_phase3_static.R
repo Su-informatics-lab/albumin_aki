@@ -133,6 +133,18 @@ if (requireNamespace("sandwich", quietly = TRUE) &&
     estimate$or_ci_lo < estimate$or,
     estimate$or_ci_hi > estimate$or
   )
+  interaction <- pair_interaction_or_rd(
+    rep(c(0, 1), each = 50),
+    c(rep(0, 75), rep(1, 25)),
+    rep(c(0, 1), each = 50)
+  )
+  stopifnot(
+    interaction$n == 100,
+    is.finite(interaction$interaction_or),
+    is.finite(interaction$interaction_rd),
+    interaction$or_ci_lo < interaction$interaction_or,
+    interaction$or_ci_hi > interaction$interaction_or
+  )
 }
 
 cat(

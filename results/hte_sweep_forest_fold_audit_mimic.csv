@@ -1,0 +1,3 @@
+"outcome","n_pairs","status","n_components","largest_component_pairs","largest_component_fraction","fold1_pairs","fold2_pairs","fold3_pairs","fold4_pairs","fold5_pairs","patient_overlap_across_folds"
+"aki1_48h",4690,"patient_disjoint_5fold",2031,120,0.0221075902726603,975,913,900,948,954,0
+"aki1_7d",4202,"patient_disjoint_5fold",2031,120,0.0221075902726603,830,797,855,878,842,0

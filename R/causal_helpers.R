@@ -197,6 +197,59 @@ pair_or_rd <- function(y_t, y_c, adjust_t = NULL, adjust_c = NULL) {
   result
 }
 
+pair_interaction_or_rd <- function(y_t, y_c, modifier, modifier_scale = 1) {
+  valid <- !is.na(y_t) & !is.na(y_c) & !is.na(modifier)
+  y_t <- y_t[valid]
+  y_c <- y_c[valid]
+  modifier <- modifier[valid] / modifier_scale
+  n <- length(y_t)
+  result <- data.frame(
+    n = n,
+    events_trt = sum(y_t),
+    events_ctl = sum(y_c),
+    interaction_or = NA_real_,
+    or_ci_lo = NA_real_,
+    or_ci_hi = NA_real_,
+    or_p = NA_real_,
+    interaction_rd = NA_real_,
+    rd_ci_lo = NA_real_,
+    rd_ci_hi = NA_real_,
+    rd_p = NA_real_
+  )
+  if (n < 50 || sum(y_t) + sum(y_c) < 5) return(result)
+  dat <- data.frame(
+    outcome = c(y_t, y_c),
+    treated = rep(c(1L, 0L), each = n),
+    modifier = rep(modifier, 2)
+  )
+  formula <- outcome ~ treated * modifier
+  fit_or <- tryCatch(
+    glm(formula, data = dat, family = quasibinomial()),
+    error = function(e) NULL
+  )
+  fit_rd <- tryCatch(lm(formula, data = dat), error = function(e) NULL)
+  ct_or <- if (is.null(fit_or)) NULL else safe_hc1(fit_or)
+  ct_rd <- if (is.null(fit_rd)) NULL else safe_hc1(fit_rd)
+  term <- "treated:modifier"
+  if (!is.null(ct_or) && term %in% rownames(ct_or)) {
+    estimate <- ct_or[term, 1]
+    se <- ct_or[term, 2]
+    result$interaction_or <- exp(estimate)
+    result$or_ci_lo <- exp(estimate - 1.96 * se)
+    result$or_ci_hi <- exp(estimate + 1.96 * se)
+    result$or_p <- ct_or[term, ncol(ct_or)]
+  }
+  if (!is.null(ct_rd) && term %in% rownames(ct_rd)) {
+    estimate <- ct_rd[term, 1]
+    se <- ct_rd[term, 2]
+    result$interaction_rd <- estimate
+    result$rd_ci_lo <- estimate - 1.96 * se
+    result$rd_ci_hi <- estimate + 1.96 * se
+    result$rd_p <- ct_rd[term, ncol(ct_rd)]
+  }
+  result
+}
+
 fixed_window_death <- function(death_offset_h, t0_h, horizon_h) {
   as.integer(
     !is.na(death_offset_h) & death_offset_h > t0_h &

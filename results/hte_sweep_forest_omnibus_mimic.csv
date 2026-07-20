@@ -1,0 +1,3 @@
+"outcome","method","status","n_pairs","calibration_slope","ci_lo","ci_hi","p_heterogeneity"
+"aki1_48h","5-fold patient-disjoint pair-difference R-forest","patient_disjoint_5fold",4690,0.967914518459316,0.872248200083801,1.06358083683483,4.17875228345406e-84
+"aki1_7d","5-fold patient-disjoint pair-difference R-forest","patient_disjoint_5fold",4202,0.976686560543903,0.876145515510883,1.07722760557692,1.35478180219316e-77

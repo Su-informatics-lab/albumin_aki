@@ -136,37 +136,16 @@ interactions <- list()
 for (outcome in outcomes) {
   y_t <- pairs[[paste0(outcome, "_trt")]]
   y_c <- pairs[[paste0(outcome, "_ctl")]]
-  valid <- !is.na(y_t) & !is.na(y_c) & !is.na(modifier$egfr)
-  n <- sum(valid)
-  row <- data.frame(
-    db = db, modifier = "eGFR_per_30", outcome = outcome, n = n,
-    interaction_or = NA_real_, ci_lo = NA_real_, ci_hi = NA_real_,
-    p_interaction = NA_real_
+  estimate <- pair_interaction_or_rd(
+    y_t, y_c, modifier$egfr, modifier_scale = 30
   )
-  if (n >= 50 && sum(y_t[valid]) + sum(y_c[valid]) >= 5) {
-    dat <- data.frame(
-      outcome = c(y_t[valid], y_c[valid]),
-      treated = rep(c(1L, 0L), each = n),
-      egfr30 = rep(modifier$egfr[valid] / 30, 2)
-    )
-    fit <- tryCatch(
-      glm(outcome ~ treated * egfr30, data = dat, family = quasibinomial()),
-      error = function(e) NULL
-    )
-    if (!is.null(fit)) {
-      ct <- safe_hc1(fit)
-      term <- "treated:egfr30"
-      if (!is.null(ct) && term %in% rownames(ct)) {
-        estimate <- ct[term, 1]
-        se <- ct[term, 2]
-        row$interaction_or <- exp(estimate)
-        row$ci_lo <- exp(estimate - 1.96 * se)
-        row$ci_hi <- exp(estimate + 1.96 * se)
-        row$p_interaction <- ct[term, ncol(ct)]
-      }
-    }
-  }
-  interactions[[length(interactions) + 1L]] <- row
+  interactions[[length(interactions) + 1L]] <- cbind(
+    data.frame(
+      db = db, modifier = "eGFR_per_30", outcome = outcome,
+      method = "psm_hc1"
+    ),
+    estimate
+  )
 }
 interaction_df <- do.call(rbind, interactions)
 
