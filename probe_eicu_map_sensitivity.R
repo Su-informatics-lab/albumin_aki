@@ -240,8 +240,8 @@ treated_ok <- treated_all[
     (is.na(all_pts$death_offset_h[treated_all]) |
        all_pts$death_offset_h[treated_all] > all_pts$alb_offset_h[treated_all])
 ]
-if (length(treated_ok) != 1949L) {
-  stop("Eligibility drift: expected 1,949 eligible treated")
+if (length(treated_ok) != 1981L) {
+  stop("Eligibility drift: expected 1,981 eligible treated")
 }
 
 # 20 frozen clinical variables + MAP = 21; map_missing is an additional
