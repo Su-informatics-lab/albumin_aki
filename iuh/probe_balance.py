@@ -59,11 +59,11 @@ for row in balance.sort_values("smd", ascending=False).head(10).itertuples():
 
 binary = pd.read_csv(results / "did_binary_pooled_iuh.csv")
 for outcome in ["aki1_48h", "aki1_7d", "death_48h_all", "death_7d_all"]:
-    for row in binary[binary.outcome == outcome].itertuples():
+    for _, row in binary[binary.outcome == outcome].iterrows():
         add(
-            f"{outcome}_{row.method}_or",
-            row._asdict()["or"],
-            f"rd={row.rd:.6f}; p_or={row.or_p:.6f}; p_rd={row.rd_p:.6f}",
+            f"{outcome}_{row['method']}_or",
+            row["or"],
+            f"rd={row['rd']:.6f}; p_or={row['or_p']:.6f}; " f"p_rd={row['rd_p']:.6f}",
         )
 
 out = pd.DataFrame(rows)
