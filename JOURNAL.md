@@ -3634,3 +3634,41 @@ evaluable pair counts, and sparse flags, plus arm-specific isolated-blip
 counts/fractions. No patient-level file or pair file left Tempest/Quartz.
 
 >>> RESULTS-GATE STOP. Entry 29 is ready for supervisor review; frozen v3.3 pairs and estimator remain unchanged. <<<
+
+---
+
+## Entry 30 — Supervisor synthesis: MIMIC signal is measurement-robust; pivot from artifact to confounding/generalizability  (2026-07-20, Claude/supervisor)
+
+Entries 27–29 close the "did we break MIMIC's ETL / is it a monitoring artifact" question with a clear
+**no**. The AKI/mortality definitions are identical shared code across the three DBs (Entry 27); and the
+MIMIC AKI≥1 signal survives every read-only ascertainment stress test (Entries 28–29): sampling is only
+modestly denser and not differential by arm; missing-as-non-event is negligible in MIMIC; no treated
+hemodilution nadir; ≥3-Cr restriction preserves it; and a scheduled single-draw-per-day removes only
+~7–10% of the RD (DR OR 1.88→1.81/1.87), with the event drop hitting both arms. So the MIMIC association
+is NOT our measurement artifact.
+
+**What "robust" does and does not mean.** Robust to *our-pipeline measurement/ascertainment* — yes. It
+does NOT mean (a) causal, or (b) replicated across databases. The cross-DB picture stands: MIMIC strong,
+eICU weak-but-leaning-up once its own missingness is corrected (Entry 28: drop-missing 1.24→1.32), IUH
+null. And mortality is elevated in eICU/IUH (not MIMIC), the shadow of residual severity confounding.
+
+**The live question has changed** from measurement to **confounding + generalizability**. Haining/Su's
+hypothesis: MIMIC = BIDMC, a single center whose albumin practice may be idiosyncratic (Su has flagged
+MIMIC quirks before); eICU is ~200-hospital multicenter (averages out, noisier exposure); IUH single
+center, null. Two non-exclusive readings, and they are testable:
+- **MIMIC-quirk / confounding:** treated much sicker on (proxy) severity at BIDMC; small E-value; no
+  eICU center resembles MIMIC; idiosyncratic albumin case-mix.
+- **MIMIC-closest-to-truth:** best/densest+precise exposure capture; large E-value; comparable
+  high-fidelity eICU academic centers DO show it; eICU/IUH attenuation tracks their measurement sparsity
+  (already partly seen).
+
+**Discriminating analyses proposed (not yet run; measurement debugging is DONE — do not re-run that):**
+1. **E-value** on the MIMIC OR (1.76–1.88) and RD — how strong an unmeasured confounder would be needed.
+2. **eICU between-hospital heterogeneity** (eICU has `hospitalid`): albumin→AKI by hospital / teaching
+   status / size; does any academic-center cluster resemble MIMIC? This is the sharpest test of
+   "single-center quirk vs practice heterogeneity."
+3. **Characterize MIMIC albumin indication + case-mix** vs eICU/IUH (5% vs 25%, timing vs surgery,
+   bleeding/transfusion/CPB/vasopressor context; treated-vs-control severity gap).
+This is also the point to bring Su in — the BIDMC-practice judgment is partly clinical.
+
+>>> CODEX TASK QUEUED (Entry 31, approved by Haining 2026-07-20): (A) E-value on the MIMIC AKI≥1 estimates; (B) eICU between-hospital heterogeneity of albumin→AKI (single-center-quirk vs practice-heterogeneity test); (C) MIMIC albumin-practice + case-mix characterization vs eICU/IUH for the Su materials. Read-only on frozen v3.3 pairs; PS/exposure/pairs unchanged; aggregate CSVs only; patient-level stays on HPC. Report Entry 31, STOP. <<<
