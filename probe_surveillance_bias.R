@@ -180,7 +180,13 @@ cr_id <- if ("patientunitstayid" %in% names(cr_all)) {
 } else {
   "stay_id"
 }
+lab_id <- if ("patientunitstayid" %in% names(labs)) {
+  "patientunitstayid"
+} else {
+  "stay_id"
+}
 cr_all$pid <- cr_all[[cr_id]]
+labs$pid <- labs[[lab_id]]
 cr_all <- cr_all[order(cr_all$pid, cr_all$offset_h, -cr_all$labresult), ]
 cr_list <- split(cr_all[, c("labresult", "offset_h")], cr_all$pid)
 
