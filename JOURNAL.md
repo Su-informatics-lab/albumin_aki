@@ -3255,3 +3255,209 @@ baseline a hemodilution dip vs the patient's own earlier Cr?); and MIMIC mortali
 ascertainment artifact and the honest cross-DB story is null/weak — which we report.
 
 >>> CODEX TASK QUEUED (debug, read-only probes): surveillance-harmonization battery. Aggregate CSVs only; patient-level stays remote. Report Entry 28, STOP. <<<
+
+---
+
+## Entry 28 — Read-only creatinine-surveillance debug on the frozen v3.3 pairs (2026-07-20, Codex)
+
+### Scope and integrity gate
+
+This was a read-only outcome re-ascertainment. I did **not** fit a propensity
+score, re-match, change the caliper, change the exposure, or alter the frozen
+v3.3 pairs. The probe loaded the existing pooled pair files (MIMIC 5,428;
+eICU 1,949; IUH 1,375) and changed only post-T0 creatinine ascertainment or
+missing-outcome handling. Patient-level files remained on Tempest/Quartz.
+
+The probe first reproduced every native PSM and triggered-DR OR/RD against the
+committed canonical results. Across all three databases, four outcomes, and
+both estimators, the largest absolute difference was <2.2e-14. All integrity
+checks passed. The original horizon-specific crossover censor was retained
+(MIMIC: 4,690 evaluable pairs at 48h and 4,202 at 7d).
+
+Remote execution used Slurm job 4263090 on Tempest (R 4.5.1; MIMIC + eICU) and
+job 9724306 on Quartz (R 4.3.1; IUH); both completed with exit code 0. Earlier
+attempts 4263085/9724282/9724290 failed before estimating an outcome because
+of R/package or identifier setup, and produced no analytic result.
+
+### 1. Creatinine-sampling density
+
+Counts are pair-weighted because a reused control is evaluated at each
+treated patient's assigned T0. Values are median [IQR] creatinine draws in
+the stated post-T0 window; the ratio is treated/control median.
+
+| Database | Horizon | Treated | Control | Treated:control median ratio |
+|---|---|---:|---:|---:|
+| MIMIC | 48h | 3 [2, 3] | 3 [2, 3] | 1.00 |
+| MIMIC | 7d | 6 [4, 8] | 6 [4, 9] | 1.00 |
+| eICU | 48h | 2 [2, 3] | 2 [2, 3] | 1.00 |
+| eICU | 7d | 5 [3, 7] | 5 [3, 7] | 1.00 |
+| IUH | 48h | 2 [2, 3] | 2 [2, 3] | 1.00 |
+| IUH | 7d | 6 [4, 7.5] | 7 [4.5, 8] | 0.86 |
+
+MIMIC is only modestly denser: one additional median draw at 48h versus eICU
+and IUH, and one additional median draw at 7d versus eICU. There is no
+treated-over-control sampling excess within MIMIC. Mean counts are also
+slightly higher in controls than treated patients (MIMIC 2.91 vs 2.86 at 48h
+and 7.15 vs 6.75 at 7d; eICU 2.45 vs 2.36 and 5.60 vs 5.60; IUH 2.61 vs 2.47
+and 7.03 vs 6.41).
+
+### 2. Native versus surveillance-harmonized AKI
+
+The requested one-per-day rule was implemented as the daily peak in each
+T0-anchored 24-hour follow-up day, the common representation supported by all
+three offset-based schemas. This is an important logical limitation of the
+requested test: for an outcome defined as `any()` creatinine crossing a
+threshold over the window, retaining each day's peak cannot remove any
+threshold crossing. The probe confirmed exact patient-by-patient identity
+between native and daily-peak AKI in every database and outcome. Thus
+native=daily below by construction, not because surveillance bias was
+empirically ruled out.
+
+The measurement-restricted variant retains a frozen pair only when both
+members have at least three post-T0 creatinines in the relevant horizon.
+This is a post-exposure selection sensitivity, not a replacement estimand.
+Cells marked **GREY** have <20 events in at least one arm and are not
+interpreted. Each cell is OR [95% CI]; RD [95% CI].
+
+#### PSM
+
+| Database / outcome | Native | Daily peak (1/day) | Both members >=3 Cr |
+|---|---|---|---|
+| MIMIC AKI>=1 48h | 1.63 [1.49, 1.78]; +0.102 [0.083, 0.120] | 1.63 [1.49, 1.78]; +0.102 [0.083, 0.120] | 1.66 [1.40, 1.96]; +0.121 [0.082, 0.161] |
+| MIMIC AKI>=2 48h | 1.79 [1.44, 2.23]; +0.022 [0.014, 0.029] | 1.79 [1.44, 2.23]; +0.022 [0.014, 0.029] | 1.35 [0.97, 1.86]; +0.019 [-0.002, 0.039] |
+| MIMIC AKI>=1 7d | 1.63 [1.49, 1.78]; +0.109 [0.089, 0.130] | 1.63 [1.49, 1.78]; +0.109 [0.089, 0.130] | 1.61 [1.46, 1.77]; +0.108 [0.087, 0.129] |
+| MIMIC AKI>=2 7d | 1.78 [1.49, 2.13]; +0.035 [0.024, 0.045] | 1.78 [1.49, 2.13]; +0.035 [0.024, 0.045] | 1.79 [1.49, 2.14]; +0.036 [0.025, 0.047] |
+| eICU AKI>=1 48h | 1.10 [0.95, 1.28]; +0.017 [-0.010, 0.044] | 1.10 [0.95, 1.28]; +0.017 [-0.010, 0.044] | 1.30 [0.86, 1.96]; +0.060 [-0.034, 0.155] |
+| eICU AKI>=2 48h | 1.21 [0.84, 1.76]; +0.006 [-0.005, 0.017] | 1.21 [0.84, 1.76]; +0.006 [-0.005, 0.017] | **GREY:** 1.10 [0.47, 2.55]; +0.005 [-0.041, 0.051] |
+| eICU AKI>=1 7d | 1.13 [0.98, 1.32]; +0.024 [-0.005, 0.052] | 1.13 [0.98, 1.32]; +0.024 [-0.005, 0.052] | 1.05 [0.88, 1.26]; +0.011 [-0.026, 0.047] |
+| eICU AKI>=2 7d | 1.19 [0.89, 1.60]; +0.009 [-0.006, 0.023] | 1.19 [0.89, 1.60]; +0.009 [-0.006, 0.023] | 1.14 [0.82, 1.58]; +0.007 [-0.012, 0.027] |
+| IUH AKI>=1 48h | 0.97 [0.80, 1.16]; -0.006 [-0.040, 0.027] | 0.97 [0.80, 1.16]; -0.006 [-0.040, 0.027] | 0.96 [0.54, 1.69]; -0.010 [-0.150, 0.130] |
+| IUH AKI>=2 48h | 0.94 [0.62, 1.41]; -0.002 [-0.018, 0.013] | 0.94 [0.62, 1.41]; -0.002 [-0.018, 0.013] | **GREY:** 0.89 [0.34, 2.31]; -0.010 [-0.093, 0.073] |
+| IUH AKI>=1 7d | 0.97 [0.80, 1.17]; -0.007 [-0.044, 0.031] | 0.97 [0.80, 1.17]; -0.007 [-0.044, 0.031] | 0.97 [0.80, 1.18]; -0.006 [-0.046, 0.034] |
+| IUH AKI>=2 7d | 1.02 [0.72, 1.44]; +0.001 [-0.020, 0.022] | 1.02 [0.72, 1.44]; +0.001 [-0.020, 0.022] | 1.02 [0.71, 1.45]; +0.001 [-0.021, 0.023] |
+
+#### Doubly robust (triggered only by the frozen balance rule)
+
+| Database / outcome | Native | Daily peak (1/day) | Both members >=3 Cr |
+|---|---|---|---|
+| MIMIC AKI>=1 48h | 1.88 [1.71, 2.07]; +0.123 [0.105, 0.141] | 1.88 [1.71, 2.07]; +0.123 [0.105, 0.141] | 1.97 [1.65, 2.35]; +0.149 [0.111, 0.187] |
+| MIMIC AKI>=2 48h | 1.97 [1.59, 2.45]; +0.024 [0.016, 0.032] | 1.97 [1.59, 2.45]; +0.024 [0.016, 0.032] | 1.33 [0.96, 1.84]; +0.016 [-0.004, 0.036] |
+| MIMIC AKI>=1 7d | 1.76 [1.60, 1.94]; +0.119 [0.099, 0.139] | 1.76 [1.60, 1.94]; +0.119 [0.099, 0.139] | 1.76 [1.59, 1.94]; +0.119 [0.099, 0.140] |
+| MIMIC AKI>=2 7d | 1.92 [1.60, 2.30]; +0.037 [0.027, 0.048] | 1.92 [1.60, 2.30]; +0.037 [0.027, 0.048] | 1.96 [1.63, 2.35]; +0.039 [0.028, 0.050] |
+| eICU AKI>=1 48h | 1.24 [1.06, 1.45]; +0.034 [0.007, 0.060] | 1.24 [1.06, 1.45]; +0.034 [0.007, 0.060] | 1.47 [0.95, 2.27]; +0.081 [-0.012, 0.173] |
+| eICU AKI>=2 48h | 1.19 [0.82, 1.72]; +0.005 [-0.006, 0.016] | 1.19 [0.82, 1.72]; +0.005 [-0.006, 0.016] | **GREY:** 1.07 [0.47, 2.45]; +0.004 [-0.041, 0.049] |
+| eICU AKI>=1 7d | 1.24 [1.06, 1.45]; +0.038 [0.010, 0.066] | 1.24 [1.06, 1.45]; +0.038 [0.010, 0.066] | 1.15 [0.96, 1.38]; +0.026 [-0.010, 0.062] |
+| eICU AKI>=2 7d | 1.23 [0.92, 1.64]; +0.010 [-0.004, 0.025] | 1.23 [0.92, 1.64]; +0.010 [-0.004, 0.025] | 1.17 [0.84, 1.63]; +0.009 [-0.010, 0.029] |
+| IUH AKI>=1 48h | 1.21 [0.99, 1.48]; +0.025 [-0.007, 0.057] | 1.21 [0.99, 1.48]; +0.025 [-0.007, 0.057] | 1.26 [0.65, 2.46]; +0.051 [-0.085, 0.188] |
+| IUH AKI>=2 48h | 1.08 [0.71, 1.66]; +0.003 [-0.013, 0.018] | 1.08 [0.71, 1.66]; +0.003 [-0.013, 0.018] | **GREY:** 0.91 [0.33, 2.56]; -0.013 [-0.097, 0.071] |
+| IUH AKI>=1 7d | 1.14 [0.93, 1.40]; +0.020 [-0.017, 0.056] | 1.14 [0.93, 1.40]; +0.020 [-0.017, 0.056] | 1.15 [0.93, 1.42]; +0.022 [-0.017, 0.060] |
+| IUH AKI>=2 7d | 1.08 [0.74, 1.57]; +0.004 [-0.017, 0.025] | 1.08 [0.74, 1.57]; +0.004 [-0.017, 0.025] | 1.08 [0.74, 1.58]; +0.004 [-0.019, 0.026] |
+
+The >=3-Cr restriction leaves only 1,178 MIMIC, 199 eICU, and 98 IUH
+evaluable pairs at 48h. MIMIC AKI>=1 does not attenuate under this restriction;
+it strengthens slightly. MIMIC AKI>=2 at 48h attenuates (DR 1.97 to 1.33), but
+the 7d estimates are essentially unchanged. This isolated 48h stage>=2 change
+cannot be read as a clean correction because eligibility is determined by a
+post-treatment measurement process.
+
+### 3. Missing-post-T0 sensitivity
+
+No-post-T0 creatinine rates by arm were:
+
+| Database | Horizon | Treated | Control |
+|---|---|---:|---:|
+| MIMIC | 48h | 4/5,428 (0.07%) | 7/5,428 (0.13%) |
+| MIMIC | 7d | 4/5,428 (0.07%) | 5/5,428 (0.09%) |
+| eICU | 48h | 110/1,949 (5.64%) | 59/1,949 (3.03%) |
+| eICU | 7d | 47/1,949 (2.41%) | 34/1,949 (1.74%) |
+| IUH | 48h | 5/1,375 (0.36%) | 4/1,375 (0.29%) |
+| IUH | 7d | 3/1,375 (0.22%) | 1/1,375 (0.07%) |
+
+Dropping the whole pair when either member lacked post-T0 creatinine barely
+moved MIMIC. In eICU it moved AKI>=1 farther from null, consistent with its
+higher missingness in treated patients. Native -> dropped-pair results are:
+
+| DB / outcome | PSM OR; RD | DR OR; RD |
+|---|---|---|
+| MIMIC AKI>=1 48h | 1.63; +0.102 -> 1.63; +0.102 | 1.88; +0.123 -> 1.89; +0.123 |
+| MIMIC AKI>=2 48h | 1.79; +0.022 -> 1.79; +0.021 | 1.97; +0.024 -> 1.96; +0.024 |
+| MIMIC AKI>=1 7d | 1.63; +0.109 -> 1.63; +0.110 | 1.76; +0.119 -> 1.77; +0.119 |
+| MIMIC AKI>=2 7d | 1.78; +0.035 -> 1.78; +0.035 | 1.92; +0.037 -> 1.92; +0.037 |
+| eICU AKI>=1 48h | 1.10; +0.017 -> 1.16; +0.028 | 1.24; +0.034 -> 1.32; +0.046 |
+| eICU AKI>=2 48h | 1.21; +0.006 -> 1.24; +0.007 | 1.19; +0.005 -> 1.22; +0.006 |
+| eICU AKI>=1 7d | 1.13; +0.024 -> 1.15; +0.028 | 1.24; +0.038 -> 1.27; +0.043 |
+| eICU AKI>=2 7d | 1.19; +0.009 -> 1.22; +0.010 | 1.23; +0.010 -> 1.26; +0.012 |
+
+The aggregate CSVs retain 95% CIs and P values for every row.
+
+### 4. Baseline-nadir check
+
+The dip is `cr_ref_early - baseline_cr`; positive values mean the matched
+baseline was lower than the patient's earlier reference. To avoid reversing
+time, the distribution includes only pair instances where the early-reference
+timestamp was at or before the pair-specific baseline timestamp. There were
+no missing reference/baseline values, but some `cr_ref_early` timestamps were
+later than the pair-specific baseline timestamp and were excluded (reported
+explicitly below).
+
+| Database / arm | Evaluable / pair members | Early ref later than baseline | Dip median [IQR] | Mean dip | Dip >0 | Dip >=0.1 mg/dL |
+|---|---:|---:|---:|---:|---:|---:|
+| MIMIC treated | 3,687 / 5,428 | 1,741 | 0 [0, 0] | -0.002 | 10.85% | 6.59% |
+| MIMIC control | 3,817 / 5,428 | 1,611 | 0 [0, 0] | +0.012 | 14.62% | 9.12% |
+| eICU treated | 1,452 / 1,949 | 497 | 0 [0, 0] | +0.033 | 16.25% | 9.71% |
+| eICU control | 1,489 / 1,949 | 460 | 0 [0, 0] | +0.033 | 19.07% | 11.89% |
+| IUH treated | 1,005 / 1,375 | 370 | 0 [0, 0] | -0.007 | 8.66% | 3.18% |
+| IUH control | 996 / 1,375 | 379 | 0 [0, 0] | -0.004 | 6.83% | 3.31% |
+
+The data do not show a MIMIC treated-specific hemodilution trough by this
+diagnostic. In MIMIC, a positive dip and a >=0.1-mg/dL dip are less common in
+treated patients than matched controls; eICU has larger positive-dip
+fractions in both arms. Same-timestamp counts (where the deterministic max
+tie rule makes the values directly comparable) were MIMIC 431/464,
+eICU 509/545, and IUH 396/372 for treated/control.
+
+### 5. MIMIC mortality re-ascertainment
+
+`patients.dod` added four treated and 14 control deaths within seven calendar
+days of T0; its result was identical to the combined deathtime-or-DOD
+definition.
+
+| Definition | Estimator | Deaths treated/control | OR [95% CI] | RD [95% CI] |
+|---|---|---:|---:|---:|
+| Current deathtime | PSM | 67 / 86 | 0.78 [0.56, 1.07] | -0.0035 [-0.0079, 0.0009] |
+| Current deathtime | DR | 67 / 86 | 1.41 [0.99, 2.01] | +0.0029 [-0.0015, 0.0073] |
+| `patients.dod` calendar | PSM | 71 / 100 | 0.71 [0.52, 0.96] | -0.0053 [-0.0100, -0.0007] |
+| `patients.dod` calendar | DR | 71 / 100 | 1.26 [0.90, 1.76] | +0.0017 [-0.0030, 0.0063] |
+
+Counting all-location DOD therefore does not make MIMIC mortality rise toward
+eICU/IUH. On the frozen DR scale it moves toward null.
+
+### Honest interpretation
+
+The specific surveillance-bias hypothesis tested here is **not supported as
+an explanation for the MIMIC AKI excess**. MIMIC sampling is only modestly
+denser and is not differential toward the treated arm; missing-as-non-event
+has negligible impact in MIMIC; the time-ordered baseline comparison does not
+show a treated-specific MIMIC nadir; and the >=3-measurement sensitivity
+preserves or strengthens MIMIC AKI>=1 (48h DR 1.97, 7d DR 1.76). The one-per-day
+daily-peak result is non-diagnostic rather than exculpatory: daily peaks
+mathematically preserve a peak-`any()` outcome, so this requested
+harmonization cannot remove extra opportunities to observe a transient rise.
+A genuinely surveillance-limiting rule would need a predesignated single draw
+(for example, first/closest-to-fixed-time) rather than the daily peak; that is
+a different, not-yet-approved outcome definition and was not run. These
+results do not establish causal kidney injury—residual severity confounding
+and other cross-database measurement differences remain—but the executed
+read-only battery does not make the MIMIC stage-1 association collapse toward
+eICU/IUH.
+
+### Aggregate artifacts and gate
+
+Committed outputs are `results/surveillance_*.csv`: per-database density,
+native/daily/>=3 outcome comparisons, no-post rates, baseline-dip summaries,
+native-result integrity checks, MIMIC/eICU missing-drop sensitivities, and
+MIMIC mortality re-ascertainment. The outcome-comparison CSVs contain the full
+PSM and DR OR/RD estimates, CIs, P values, event counts, sample sizes, and
+sparse-cell flags. No pair or patient-level file was copied or committed.
+
+>>> RESULTS-GATE STOP. Entry 28 is ready for supervisor review; no new outcome definition or estimator has been run. <<<

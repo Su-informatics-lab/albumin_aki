@@ -1,0 +1,9 @@
+"db","outcome","method","max_absolute_difference","pass"
+"IUH","aki1_48h","psm",1.67643676718399e-14,TRUE
+"IUH","aki1_48h","dr",5.99520433297585e-15,TRUE
+"IUH","aki2_48h","psm",8.43769498715119e-15,TRUE
+"IUH","aki2_48h","dr",9.32587340685131e-15,TRUE
+"IUH","aki1_7d","psm",6.66133814775094e-15,TRUE
+"IUH","aki1_7d","dr",4.44089209850063e-15,TRUE
+"IUH","aki2_7d","psm",4.77395900588817e-15,TRUE
+"IUH","aki2_7d","dr",4.21884749357559e-15,TRUE

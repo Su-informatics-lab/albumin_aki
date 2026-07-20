@@ -1,0 +1,9 @@
+"db","outcome","method","max_absolute_difference","pass"
+"EICU","aki1_48h","psm",3.77475828372553e-15,TRUE
+"EICU","aki1_48h","dr",3.99680288865056e-15,TRUE
+"EICU","aki2_48h","psm",1.04360964314765e-14,TRUE
+"EICU","aki2_48h","dr",4.66293670342566e-15,TRUE
+"EICU","aki1_7d","psm",1.33226762955019e-15,TRUE
+"EICU","aki1_7d","dr",4.66293670342566e-15,TRUE
+"EICU","aki2_7d","psm",7.32747196252603e-15,TRUE
+"EICU","aki2_7d","dr",3.99680288865056e-15,TRUE

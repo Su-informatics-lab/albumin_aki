@@ -1,0 +1,5 @@
+"db","variant","stratum","horizon","arm","n_pair_members","no_post_cr","rate"
+"MIMIC","pooled","Overall","48h","treated",5428,4,0.000736919675755343
+"MIMIC","pooled","Overall","48h","control",5428,7,0.00128960943257185
+"MIMIC","pooled","Overall","7d","treated",5428,4,0.000736919675755343
+"MIMIC","pooled","Overall","7d","control",5428,5,0.000921149594694178

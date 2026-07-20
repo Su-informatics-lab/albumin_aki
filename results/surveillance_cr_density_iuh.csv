@@ -1,0 +1,5 @@
+"db","population","horizon","arm","n","q25","median","q75","mean","treated_control_median_ratio"
+"IUH","frozen_pair_members_pair_weighted","48h","treated",1375,2,2,3,2.46836363636364,1
+"IUH","frozen_pair_members_pair_weighted","48h","control",1375,2,2,3,2.60654545454545,1
+"IUH","frozen_pair_members_pair_weighted","7d","treated",1375,4,6,7.5,6.40509090909091,0.857142857142857
+"IUH","frozen_pair_members_pair_weighted","7d","control",1375,4.5,7,8,7.03345454545455,0.857142857142857

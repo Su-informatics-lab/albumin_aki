@@ -1,0 +1,9 @@
+"db","outcome","method","max_absolute_difference","pass"
+"MIMIC","aki1_48h","psm",7.54951656745106e-15,TRUE
+"MIMIC","aki1_48h","dr",3.10862446895044e-15,TRUE
+"MIMIC","aki2_48h","psm",2.17603712826531e-14,TRUE
+"MIMIC","aki2_48h","dr",4.44089209850063e-15,TRUE
+"MIMIC","aki1_7d","psm",6.88338275267597e-15,TRUE
+"MIMIC","aki1_7d","dr",3.99680288865056e-15,TRUE
+"MIMIC","aki2_7d","psm",1.15463194561016e-14,TRUE
+"MIMIC","aki2_7d","dr",3.77475828372553e-15,TRUE

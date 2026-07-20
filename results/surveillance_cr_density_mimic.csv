@@ -1,0 +1,5 @@
+"db","population","horizon","arm","n","q25","median","q75","mean","treated_control_median_ratio"
+"MIMIC","frozen_pair_members_pair_weighted","48h","treated",5428,2,3,3,2.86182756079587,1
+"MIMIC","frozen_pair_members_pair_weighted","48h","control",5428,2,3,3,2.90991156963891,1
+"MIMIC","frozen_pair_members_pair_weighted","7d","treated",5428,4,6,8,6.75442151805453,1
+"MIMIC","frozen_pair_members_pair_weighted","7d","control",5428,4,6,9,7.1484893146647,1

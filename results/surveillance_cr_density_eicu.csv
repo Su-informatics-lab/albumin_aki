@@ -1,0 +1,5 @@
+"db","population","horizon","arm","n","q25","median","q75","mean","treated_control_median_ratio"
+"EICU","frozen_pair_members_pair_weighted","48h","treated",1949,2,2,3,2.36326321190354,1
+"EICU","frozen_pair_members_pair_weighted","48h","control",1949,2,2,3,2.450487429451,1
+"EICU","frozen_pair_members_pair_weighted","7d","treated",1949,3,5,7,5.59569009748589,1
+"EICU","frozen_pair_members_pair_weighted","7d","control",1949,3,5,7,5.59774243201642,1

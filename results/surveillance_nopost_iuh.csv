@@ -1,0 +1,5 @@
+"db","variant","stratum","horizon","arm","n_pair_members","no_post_cr","rate"
+"IUH","pooled","Overall","48h","treated",1375,5,0.00363636363636364
+"IUH","pooled","Overall","48h","control",1375,4,0.00290909090909091
+"IUH","pooled","Overall","7d","treated",1375,3,0.00218181818181818
+"IUH","pooled","Overall","7d","control",1375,1,0.000727272727272727
