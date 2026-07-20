@@ -431,7 +431,9 @@ for (scheme in c("native", LIMITED_SCHEMES)) {
         n_evaluable = sum(valid), n_aki_flags = n_flags,
         n_isolated_blips = n_isolated,
         isolated_blip_fraction = if (n_flags) n_isolated / n_flags else NA_real_,
-        sparse_lt20 = n_flags < 20
+        aki_flag_sparse_lt20 = n_flags < 20,
+        isolated_blip_sparse_lt20 = n_isolated < 20,
+        sparse_lt20 = n_flags < 20 || n_isolated < 20
       )
     }
   }
