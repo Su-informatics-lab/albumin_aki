@@ -30,6 +30,8 @@ results/did_binary_pairs_*.csv
 !results/confounding_*.csv
 !results/generalizability_*.csv
 !results/eicu_hospital_*.csv
+!results/eicu_site_completeness.csv
+!results/eicu_high_fidelity_summary.csv
 logs/
 *.csv.gz
 __pycache__/
