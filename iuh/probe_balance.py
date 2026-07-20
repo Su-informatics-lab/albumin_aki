@@ -23,8 +23,9 @@ def add(metric: str, value: float, detail: str = "") -> None:
 
 trt = all_pts[all_pts.treated == 1]
 ctl = all_pts[all_pts.treated == 0]
-matched_t = all_pts.iloc[pairs.trt_idx.astype(int)]
-matched_c = all_pts.iloc[pairs.ctl_idx.astype(int)]
+# Pair indices are serialized from R and are therefore one-based.
+matched_t = all_pts.iloc[pairs.trt_idx.astype(int) - 1]
+matched_c = all_pts.iloc[pairs.ctl_idx.astype(int) - 1]
 for label, frame in [
     ("source_treated", trt),
     ("source_never_control", ctl),
