@@ -1,0 +1,2 @@
+database,window,source,treated_source_n,treated_with_positive_volume_n,raw_albumin_event_n,contributing_event_n,time_resolved_event_n,zero_or_missing_duration_event_n,max_t0_reconciliation_seconds,grams_computed,product_label_used
+MIMIC,"delivered volume in (T0,T0+24h]",inputevents.amount with amountuom=mL,5771,5771,17944,12768,17944,0,2.0463630789890885e-10,False,False

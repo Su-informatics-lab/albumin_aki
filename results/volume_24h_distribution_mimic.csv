@@ -1,0 +1,2 @@
+"database","population","window","n","positive_volume_n","zero_volume_n","min_ml","p25_ml","median_ml","p75_ml","max_ml","iqr_ml","tertile_cut1_ml","tertile_cut2_ml"
+"MIMIC","frozen pooled matched treated","delivered volume in (T0,T0+24h]",5428,5428,0,25.3333340883255,499.999980926514,749.999971389771,999.999961853027,4999.99980926514,499.999980926514,499.999980926514,999.999961853027

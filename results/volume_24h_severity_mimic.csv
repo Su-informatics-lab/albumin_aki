@@ -1,0 +1,7 @@
+"db","severity_axis","summary_type","level","n","median_volume_ml","p25_volume_ml","p75_volume_ml","spearman_rho","p"
+"MIMIC","vaso_at_t0","binary_group","0",2237,499.999980926514,499.999980926514,999.999961853027,NA,1.81954535408259e-53
+"MIMIC","vaso_at_t0","binary_group","1",3191,999.999961853027,499.999980926514,999.999981880188,NA,1.81954535408259e-53
+"MIMIC","vent_at_t0","binary_group","0",2224,499.999980926514,499.999980926514,999.999961853027,NA,3.63030195566701e-109
+"MIMIC","vent_at_t0","binary_group","1",3204,999.999961853027,499.999980926514,1000,NA,3.63030195566701e-109
+"MIMIC","map_before_t0","spearman","continuous",5407,NA,NA,NA,-0.0117376233277257,0.388178881053196
+"MIMIC","last_lactate","spearman","continuous",5222,NA,NA,NA,0.213053540116934,1.13898930364788e-54

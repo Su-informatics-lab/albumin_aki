@@ -1,0 +1,3 @@
+"database","volume_supported","median_volume_ml","p25_volume_ml","p75_volume_ml","reason"
+"MIMIC",TRUE,749.999971389771,499.999980926514,999.999961853027,"inputevents.amount source-audited as mL volume"
+"eICU",FALSE,NA,NA,NA,"not computed: exposure combines medication and intakeOutput text rows; no source-validated uniform infused-mL administration field"
