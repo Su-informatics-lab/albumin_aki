@@ -4418,3 +4418,59 @@ locally or committed. All source data remain on Tempest; IUH source data remain
 on Quartz.
 
 >>> RESULTS-GATE STOP. Entry 39 is ready for supervisor review; frozen v3.3 remains unchanged. <<<
+
+---
+
+## Entry 40 — Supervisor: clinician-guided round confirms the verdict; analysis closed (for real)  (2026-07-20, Claude/supervisor)
+
+Verified Entry 39. Yan's three suggestions, run as labeled sensitivities, all come back confirming — not
+changing — the Entry 32/37 verdict.
+
+- **Coverage correction:** the "~26%/~74% missing" I told Haining came from the old static
+  `peri_admission_alb`. The frozen dynamic strictly-pre-T0 albumin is measured in **40.8% of the MIMIC
+  source cohort / 46.3% of eligible treated**. Correct this wherever I stated 26%.
+- **alb_cat threshold sweep (3.5/3.0/2.5): no rescue.** Balance not meaningfully improved (3.0 slightly
+  worse; 2.5 helps alb_cat but eGFR becomes max imbalance); AKI OR stays ~1.8–2.0.
+- **Albumin-stratified modification: not credible** (mirrors eGFR). AKI≥1 interaction flat (P .69/48h);
+  the lone significant cell (AKI≥2 7d) rests on a low-albumin stratum with 16/22 covariates >0.1 (eGFR SMD
+  0.40) and does not replicate in eICU (all 8 interaction tests null).
+- **IPTW→ATE (Gupta framing):** MIMIC AKI≥1 OR ~1.94 (RD +14–15%), eICU ~1.9 — but MIMIC treated ESS = 926,
+  max weight 72.6; eICU weighted imbalance (max SMD 0.28). Honest read = "patients who receive albumin have
+  higher AKI risk, indication included." Larger-than-matched reflects a different estimand/population, NOT
+  robustness; the eICU ATE jump (1.24→~1.9) is not reconciliation.
+
+**The verdict has now survived measurement (E27–29), eICU-rescue (E28/31/36), confounding/generalizability
+(E31), and the clinician-guided trigger-lab/estimand/modifier round (E39).** Convergent. Confounding-by-
+indication + practice heterogeneity; no clean effect modifier (not eGFR, not albumin); not causal or
+generalizable. This robustness IS the cautionary paper's strength. The IPTW-ATE ~1.9 is the one honest
+headline association (Gupta cautionary framing).
+
+**Analysis is closed — further runs would be shopping.** Deferred (only if Yan/Su specifically want, and
+descriptive-only): 24h albumin VOLUME dose-response within-treated (grams uncomputable, Entry 25) and a
+MAKE composite. Next step is consolidation for Su/Yan and the write-up. Added the ATE to
+`MEETING_ONEPAGER.md`.
+
+>>> NO CODEX TASK QUEUED. All analytic angles exhausted and convergent. Consolidate for clinician meeting + cautionary manuscript. <<<
+
+---
+
+## Entry 41 — Supervisor queue: the two deferred descriptive analyses (Haining approved)  (2026-07-20, Claude/supervisor)
+
+Haining approved the two deferred descriptive add-ons. Both are secondary, expected NOT to change the
+verdict, reported regardless of direction.
+
+- **(A) 24h albumin VOLUME dose-response, within-treated.** Grams remain uncomputable (Entry 25: 5%/25%
+  label unreliable), but `inputevents.amount` is verified volume — so use total infused mL in (T0, T0+24h].
+  Within-treated relation of volume to AKI (continuous + tertiles), adjusted for frozen covariates; plus a
+  volume-vs-baseline-severity confounding check and a MIMIC-vs-eICU volume comparison for Yan's
+  hospital-dose hypothesis (eICU only if its amount is reliably volume). Labeled within-treated,
+  confounded-by-indication, Bradford-Hill-supportive at most — not causal.
+- **(B) MAKE composite** = AKI≥2 OR RRT OR death (48h, 7d), through the frozen matched DR engine, MIMIC +
+  eICU, pooled + eGFR-stratified, reported with its three components so the composite isn't hiding a
+  death- or AKI-driven signal.
+
+IUH is out this round — its patient-level inputs are no longer on Quartz (Entry 39); would require ETL
+restart (separate decision), and mg data must not be substituted. Frozen v3.3 untouched; aggregate CSVs
+only. Codex to report Entry 42, STOP.
+
+>>> CODEX TASK QUEUED (Entry 42): (A) within-treated 24h-volume dose-response; (B) MAKE composite. Descriptive/secondary; MIMIC+eICU; IUH unavailable. STOP after Entry 42. <<<
