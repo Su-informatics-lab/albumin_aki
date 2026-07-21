@@ -13,7 +13,11 @@
 
 set -euo pipefail
 
-db="${1:?Usage: sbatch run_trigger_estimand_sensitivity.sbatch {mimic|eicu|iuh}}"
+if [[ "$#" -ne 1 ]]; then
+  echo "Usage: sbatch run_trigger_estimand_sensitivity.sbatch {mimic|eicu|iuh}" >&2
+  exit 2
+fi
+db="$1"
 if [[ ! "$db" =~ ^(mimic|eicu|iuh)$ ]]; then
   echo "Invalid database: $db" >&2
   exit 2
