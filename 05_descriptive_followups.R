@@ -39,6 +39,16 @@ safe_read <- function(name) {
 }
 
 build_covariates <- function(all_pts, labs, tag) {
+  if (!("pid" %in% names(labs))) {
+    lab_id <- if ("patientunitstayid" %in% names(labs)) {
+      "patientunitstayid"
+    } else if ("stay_id" %in% names(labs)) {
+      "stay_id"
+    } else {
+      stop("Lab stream has no recognized patient identifier")
+    }
+    labs$pid <- labs[[lab_id]]
+  }
   index_h <- ifelse(
     !is.na(all_pts$alb_offset_h),
     all_pts$alb_offset_h,
