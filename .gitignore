@@ -37,6 +37,8 @@ results/eicu_map_sensitivity_pairs.csv
 !results/trigger_threshold_*.csv
 !results/albumin_stratified_*.csv
 !results/iptw_ate_*.csv
+!results/volume_24h_*.csv
+!results/make_*.csv
 logs/
 *.csv.gz
 __pycache__/
