@@ -4204,3 +4204,25 @@ patient identifier. The rematched patient-level pair file and MAP cache remain
 only on Tempest and are gitignored.
 
 >>> RESULTS-GATE STOP. Entry 36 is ready for supervisor review; frozen v3.3 remains unchanged. <<<
+
+---
+
+## Entry 37 — Supervisor: eICU `+MAP` closes the under-adjustment thread; eICU weakness is genuine  (2026-07-20, Claude/supervisor)
+
+Verified Entry 36. The dual-source MAP recovery (89.9/89.1%) confirms the old 38% was an extraction miss —
+a real, worth-knowing finding. But adding MAP does **not** rescue eICU: DR-augmenting the frozen pairs
+moves AKI≥1 from 1.24 to **1.22** (flat, and the cleaner read); re-matching moves it to **1.31/1.35**, but
+that slight rise is partly an artifact — replacement matching concentrated MAP-missing controls, so the
+missingness-indicator SMD hit 0.27. eICU stays ~1.2–1.35, far from MIMIC 1.76–1.88.
+
+**Conclusion: eICU's weak signal is NOT our under-adjustment.** We have now tried every eICU-side rescue —
+missing-outcome coding (E28), hospital heterogeneity (E31), and the recovered-MAP re-adjustment (E36); vaso
+and vent remain genuinely unrecoverable (differential by arm). The MIMIC-vs-eICU discordance is real, which
+**strengthens the Entry 32 verdict**: confounding-by-indication + practice heterogeneity, not a
+generalizable causal effect. Updated `MEETING_ONEPAGER.md` with this.
+
+**Analysis is definitively closed.** Every measurement/adjustment avenue for reconciling the databases has
+been exhausted. The remaining decision (cautionary paper / TTE pivot / shelve) is Haining's + the
+clinicians' — go to Su/Yan/Eadon.
+
+>>> NO CODEX TASK QUEUED. All eICU-rescue avenues exhausted. Analysis closed; next step is the clinician meeting. <<<
