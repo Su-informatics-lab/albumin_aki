@@ -4474,3 +4474,185 @@ restart (separate decision), and mg data must not be substituted. Frozen v3.3 un
 only. Codex to report Entry 42, STOP.
 
 >>> CODEX TASK QUEUED (Entry 42): (A) within-treated 24h-volume dose-response; (B) MAKE composite. Descriptive/secondary; MIMIC+eICU; IUH unavailable. STOP after Entry 42. <<<
+
+---
+
+## Entry 42 — Approved descriptive 24h-volume and MAKE follow-ups  (2026-07-20, Codex)
+
+### Scope and estimator integrity
+
+These are the two Haining-approved secondary analyses from Entries 40/41. The
+frozen v3.3 exposure, PS, caliper, censoring, and matched pairs were not
+changed. The MAKE analysis reads the existing pooled and eGFR-stratified pair
+files; it neither refits a PS nor rematches. MIMIC is primary and eICU is
+supplementary. IUH was not run because its patient-level inputs are no longer
+on Quartz; no mg data or other substitute was used.
+
+The exact composite is the row-wise logical OR
+
+`MAKE_h = (AKI stage>=2_h == 1) OR (new RRT in (T0,T0+h] == 1) OR (fixed-window death_h == 1)`.
+
+The frozen horizon-specific crossover censor is retained: if the pair's
+frozen `aki2_rrt_h` is censored, MAKE and all three displayed components are
+censored for that pair. Re-derived `AKI>=2 OR new RRT` agreed row-for-row with
+the frozen `aki2_rrt` flags. The original PSM and DR OR/RD for `aki2_rrt`
+reproduced exactly in **16/16 checks per database**.
+
+### Commands and execution record
+
+Local authoring and checks:
+
+```bash
+python3 -m py_compile extract_albumin_volume.py
+bash -n run_entry42.sh
+Rscript -e "parse(file='05_descriptive_followups.R')"
+git check-ignore -v results/did_albumin_volume_24h_mimic.csv
+git add .gitignore JOURNAL.md 05_descriptive_followups.R extract_albumin_volume.py run_entry42.sh
+git diff --cached --check
+git commit -m "analysis: add approved volume and MAKE follow-ups"
+git push origin main
+```
+
+Tempest:
+
+```bash
+cd /home/g91p721/albumin_aki_integrity
+git pull --ff-only
+source /etc/profile.d/modules.sh
+module purge
+module load Python/3.10.8-GCCcore-12.2.0
+source /home/g91p721/alcrx/.venv/bin/activate
+python extract_albumin_volume.py --data-root /tmp --results /tmp --self-test
+deactivate
+module purge
+module load R/4.5.1-gfbf-2025a
+Rscript -e "parse(file='05_descriptive_followups.R')"
+sbatch run_entry42.sh
+sacct -j 4263948 --format=JobID,State,ExitCode,Elapsed -n -P
+```
+
+Job 4263947 stopped before modeling because the secondary script omitted the
+same source-ID-to-`pid` mapping used by `02_psm.R`. I changed only that input
+interface and resubmitted. Job **4263948 completed 0:0 in 00:03:36**. The
+volume-overlap fixture and R parse passed. MICE logged the same deterministic
+collinearity/predictor events seen in this covariate stack; the decisive frozen
+estimator reproduction checks all passed.
+
+### A. MIMIC 24h infused-volume dose response, within treated
+
+`inputevents.amount` was used only where `amountuom=mL`. Product labels were
+not used and grams were not computed. For time-resolved infusions, amount was
+prorated by the fraction of the infusion overlapping `(T0,T0+24h]`; this
+correctly counts volume delivered after T0 by an infusion beginning at T0.
+Raw first-albumin time reconciled to the frozen T0 within
+`2.1e-10` seconds. All 5,771 source treated patients and all 5,428 frozen
+matched treated patients had positive delivered volume.
+
+Among the 5,428 frozen matched treated patients, volume was **750 mL [IQR
+500-1,000]** (range 25.3-5,000). Tertile cut points were 500 and 1,000 mL:
+T1 <=500, T2 >500 to <=1,000, T3 >1,000 mL.
+
+The continuous estimates below are covariate-adjusted within-treated models
+using the frozen 23-covariate S2+aortic set, MICE m=20, and HC1. RD is shown in
+absolute probability units.
+
+| Outcome | Per +250 mL OR [95% CI] | Per +250 mL RD [95% CI] | Per +IQR (500 mL) OR [95% CI] | Per +IQR RD [95% CI] |
+|---|---:|---:|---:|---:|
+| AKI>=1, 48h | 1.145 [1.103, 1.189] | +0.0279 [0.0203, 0.0355] | 1.312 [1.217, 1.414] | +0.0558 [0.0406, 0.0710] |
+| AKI>=2, 48h | 1.341 [1.256, 1.431] | +0.0183 [0.0132, 0.0234] | 1.798 [1.578, 2.048] | +0.0367 [0.0265, 0.0469] |
+| AKI>=1, 7d | 1.139 [1.095, 1.185] | +0.0277 [0.0195, 0.0359] | 1.298 [1.199, 1.405] | +0.0554 [0.0390, 0.0718] |
+| AKI>=2, 7d | 1.258 [1.186, 1.335] | +0.0209 [0.0147, 0.0270] | 1.583 [1.406, 1.783] | +0.0417 [0.0294, 0.0540] |
+
+The unadjusted within-treated rates were monotone across T1/T2/T3:
+
+| Outcome | T1 | T2 | T3 | Adjusted T3 vs T1 OR [95% CI] | Adjusted T3 vs T1 RD [95% CI] |
+|---|---:|---:|---:|---:|---:|
+| AKI>=1, 48h | 30.7% (650/2,115) | 35.4% (581/1,641) | 45.7% (427/934) | 1.84 [1.53, 2.20] | +0.125 [0.088, 0.163] |
+| AKI>=2, 48h | 2.7% (57/2,115) | 4.6% (75/1,641) | 11.0% (103/934) | 4.05 [2.79, 5.90] | +0.076 [0.055, 0.098] |
+| AKI>=1, 7d | 34.4% (658/1,914) | 40.7% (604/1,484) | 51.2% (412/804) | 1.84 [1.53, 2.23] | +0.131 [0.090, 0.171] |
+| AKI>=2, 7d | 5.2% (99/1,914) | 8.4% (125/1,484) | 15.3% (123/804) | 2.76 [2.03, 3.76] | +0.083 [0.056, 0.110] |
+
+No dose cell had fewer than 20 events. However, higher volume clearly marks
+greater baseline severity: patients on vasopressors at T0 had median 1,000 vs
+500 mL without vasopressors (P=1.8e-53), and ventilated patients had median
+1,000 vs 500 mL (P=3.6e-109). Volume correlated with lactate (Spearman
+rho=0.213, P=1.1e-54), but not MAP (rho=-0.012, P=.39). Thus the positive,
+monotone slope is Bradford-Hill-supportive at most. It remains a
+within-treated observational association with strong confounding by
+indication—and the post-T0 amount may itself respond to evolving severity—so
+it is not a causal dose effect.
+
+eICU volume was not compared: its albumin exposure combines medication and
+intakeOutput text rows and has no source-validated, uniform infused-mL
+administration field. This is an unsupported comparison, not a null result.
+
+### B. MAKE composite on frozen pairs
+
+The table gives PSM and DR estimates for the composite. `†` marks a cell with
+fewer than 20 MAKE events in either arm; such cells are grey/uninterpreted in
+the aggregate table.
+
+| DB | Stratum | Horizon | Events T/C | PSM OR [95% CI]; RD [95% CI] | DR OR [95% CI]; RD [95% CI] |
+|---|---|---|---:|---|---|
+| MIMIC | Overall | 48h | 274/168 | 1.67 [1.37, 2.03]; +0.0226 [0.0140, 0.0312] | 1.99 [1.63, 2.43]; +0.0284 [0.0199, 0.0370] |
+| MIMIC | Overall | 7d | 396/247 | 1.67 [1.41, 1.96]; +0.0355 [0.0241, 0.0468] | 1.88 [1.59, 2.23]; +0.0402 [0.0291, 0.0513] |
+| MIMIC | G1 >=90 | 48h | 115/63 | 1.87 [1.36, 2.55]; +0.0209 [0.0106, 0.0312] | 2.02 [1.47, 2.80]; +0.0232 [0.0127, 0.0337] |
+| MIMIC | G1 >=90 | 7d | 144/119 | 1.22 [0.95, 1.57]; +0.0108 [-0.0025, 0.0242] | 1.37 [1.06, 1.76]; +0.0153 [0.0022, 0.0285] |
+| MIMIC | G2 60-89 | 48h | 90/31 | 3.01 [1.99, 4.56]; +0.0358 [0.0230, 0.0486] | 3.04 [2.02, 4.59]; +0.0359 [0.0233, 0.0485] |
+| MIMIC | G2 60-89 | 7d | 146/59 | 2.63 [1.93, 3.59]; +0.0574 [0.0397, 0.0752] | 2.66 [1.95, 3.63]; +0.0575 [0.0400, 0.0750] |
+| MIMIC | G3+ <60 | 48h | 59/54 | 1.10 [0.75, 1.62]; +0.0081 [-0.0241, 0.0402] | 1.36 [0.87, 2.13]; +0.0176 [-0.0121, 0.0472] |
+| MIMIC | G3+ <60 | 7d | 87/72 | 1.25 [0.89, 1.77]; +0.0313 [-0.0158, 0.0783] | 1.30 [0.90, 1.88]; +0.0316 [-0.0152, 0.0784] |
+| eICU | Overall | 48h | 140/108 | 1.32 [1.02, 1.71]; +0.0170 [0.0012, 0.0328] | 1.41 [1.08, 1.85]; +0.0178 [0.0022, 0.0335] |
+| eICU | Overall | 7d | 215/171 | 1.29 [1.04, 1.60]; +0.0242 [0.0042, 0.0443] | 1.43 [1.14, 1.78]; +0.0303 [0.0104, 0.0501] |
+| eICU | G1 >=90 | 48h | 27/6† | 4.67 [1.91, 11.41]; +0.0362 [0.0172, 0.0552] | 4.82 [1.94, 11.98]; +0.0369 [0.0175, 0.0563] |
+| eICU | G1 >=90 | 7d | 40/19† | 2.19 [1.25, 3.83]; +0.0369 [0.0112, 0.0626] | 2.16 [1.23, 3.80]; +0.0361 [0.0103, 0.0618] |
+| eICU | G2 60-89 | 48h | 41/42 | 0.97 [0.63, 1.52]; -0.0013 [-0.0241, 0.0215] | 0.94 [0.61, 1.47]; -0.0031 [-0.0259, 0.0197] |
+| eICU | G2 60-89 | 7d | 74/61 | 1.24 [0.87, 1.76]; +0.0175 [-0.0117, 0.0468] | 1.22 [0.85, 1.76]; +0.0164 [-0.0134, 0.0461] |
+| eICU | G3+ <60 | 48h | 70/57 | 1.26 [0.87, 1.83]; +0.0249 [-0.0148, 0.0646] | 1.15 [0.79, 1.69]; +0.0143 [-0.0254, 0.0540] |
+| eICU | G3+ <60 | 7d | 88/85 | 1.04 [0.75, 1.45]; +0.0064 [-0.0435, 0.0564] | 1.02 [0.73, 1.42]; +0.0026 [-0.0475, 0.0526] |
+
+Pooled component decomposition (DR; PSM is retained in the aggregate CSV):
+
+| DB | Horizon | Component | Events T/C | DR OR [95% CI] | DR RD [95% CI] |
+|---|---|---|---:|---:|---:|
+| MIMIC | 48h | AKI>=2 | 235/134 | 1.97 [1.59, 2.45] | +0.0240 [0.0162, 0.0317] |
+| MIMIC | 48h | new RRT | 37/25 | 3.19 [1.91, 5.32] | +0.0054 [0.0022, 0.0087] |
+| MIMIC | 48h | death | 26/16† | 3.34 [1.66, 6.72] | +0.0039 [0.0008, 0.0069] |
+| MIMIC | 7d | AKI>=2 | 347/202 | 1.92 [1.60, 2.30] | +0.0371 [0.0267, 0.0475] |
+| MIMIC | 7d | new RRT | 65/25 | 4.42 [2.88, 6.79] | +0.0115 [0.0072, 0.0158] |
+| MIMIC | 7d | death | 49/40 | 1.70 [1.09, 2.67] | +0.0040 [-0.0005, 0.0084] |
+| eICU | 48h | AKI>=2 | 64/53 | 1.19 [0.82, 1.72] | +0.0051 [-0.0059, 0.0162] |
+| eICU | 48h | new RRT | 30/32 | 1.20 [0.70, 2.05] | +0.0008 [-0.0075, 0.0092] |
+| eICU | 48h | death | 61/27 | 2.63 [1.63, 4.23] | +0.0177 [0.0082, 0.0273] |
+| eICU | 7d | AKI>=2 | 104/88 | 1.23 [0.92, 1.64] | +0.0102 [-0.0044, 0.0247] |
+| eICU | 7d | new RRT | 45/40 | 1.43 [0.92, 2.22] | +0.0057 [-0.0043, 0.0156] |
+| eICU | 7d | death | 113/71 | 1.86 [1.35, 2.57] | +0.0260 [0.0118, 0.0403] |
+
+**Honest MAKE read:** MIMIC's pooled MAKE elevation is predominantly the
+AKI>=2 component, with a smaller absolute RRT contribution; the 48h death cell
+is sparse and the 7d death RD includes zero. In eICU, AKI>=2 and RRT are near
+null, while fixed-window death supplies nearly the entire composite RD. Thus
+the same composite label hides different biology/selection across databases.
+The eGFR-stratified pattern is non-monotone, and eICU G1 is sparse; it does not
+rescue an eGFR modifier. The eICU mortality-driven result retains the known
+falsification/crossover-selection caveat. MAKE therefore does not change the
+frozen verdict.
+
+### Files and gate
+
+Committed aggregate-only artifacts:
+
+- `results/volume_24h_{provenance_mimic,distribution_mimic,dose_response_mimic,tertile_rates_mimic,severity_mimic,database_support}.csv`
+- `results/make_{components,integrity}_{mimic,eicu}.csv`
+
+HPC-only patient-level artifact: `/home/g91p721/albumin_aki/results/did_albumin_volume_24h_mimic.csv`.
+No pair file, patient ID, or spot-check artifact was committed.
+
+- ✅ frozen v3.3 exposure/PS/pairs unchanged
+- ✅ MIMIC volume only; grams not computed; eICU unsupported rather than guessed
+- ✅ within-treated OR and RD, continuous and tertiles, full direction reported
+- ✅ MAKE PSM and DR, pooled and eGFR-stratified, with all components exposed
+- ✅ every <20-event cell flagged; sparse extreme ORs not interpreted
+- ✅ IUH explicitly unavailable; no mg substitution
+
+>>> RESULTS-GATE STOP. Entry 42 is ready for supervisor review; neither secondary analysis changes frozen v3.3. <<<
