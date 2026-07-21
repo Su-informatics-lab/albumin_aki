@@ -12,6 +12,7 @@
 set -euo pipefail
 cd /home/g91p721/albumin_aki_integrity
 mkdir -p logs
+source /etc/profile.d/modules.sh
 
 module purge
 module load Python/3.10.8-GCCcore-12.2.0
