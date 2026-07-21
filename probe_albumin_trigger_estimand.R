@@ -316,6 +316,13 @@ matched_effects <- function(fit, pair_outcomes, analysis_name, stratum,
 interaction_or_rd <- function(y_t, y_c, modifier, adjust_t, adjust_c) {
   valid <- !is.na(y_t) & !is.na(y_c) & !is.na(modifier)
   n <- sum(valid)
+  modifier_valid <- as.character(modifier[valid])
+  cell_events <- unlist(lapply(c("missing", "normal", "low"), function(level) {
+    idx <- modifier_valid == level
+    c(trt = sum(y_t[valid][idx]), ctl = sum(y_c[valid][idx]))
+  }))
+  min_cell_events <- min(cell_events)
+  sparse_lt20 <- min_cell_events < 20
   dat <- data.frame(
     outcome = c(y_t[valid], y_c[valid]),
     treated = rep(c(1L, 0L), each = n),
@@ -360,7 +367,8 @@ interaction_or_rd <- function(y_t, y_c, modifier, adjust_t, adjust_c) {
       ci_lo = NA_real_, ci_hi = NA_real_, p = pchisq(joint, length(idx),
                                                      lower.tail = FALSE),
       n = n, events_trt = sum(y_t[valid]), events_ctl = sum(y_c[valid]),
-      sparse_lt20 = FALSE, adjustment_vars = paste(adjustment, collapse = ";")
+      min_cell_events = min_cell_events, sparse_lt20 = sparse_lt20,
+      adjustment_vars = paste(adjustment, collapse = ";")
     )
     ct <- safe_hc1(fit)
     for (j in idx) {
@@ -372,7 +380,8 @@ interaction_or_rd <- function(y_t, y_c, modifier, adjust_t, adjust_c) {
         scale = scale, term = names(beta)[j], estimate = estimate,
         ci_lo = lo, ci_hi = hi, p = ct[names(beta)[j], ncol(ct)],
         n = n, events_trt = sum(y_t[valid]), events_ctl = sum(y_c[valid]),
-        sparse_lt20 = FALSE, adjustment_vars = paste(adjustment, collapse = ";")
+        min_cell_events = min_cell_events, sparse_lt20 = sparse_lt20,
+        adjustment_vars = paste(adjustment, collapse = ";")
       )
     }
   }
