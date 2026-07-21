@@ -411,7 +411,7 @@ run_make <- function() {
                 db = db, variant = variant, stratum = stratum,
                 horizon = horizon, outcome = outcome, method = method,
                 composition = if (outcome == "make") {
-                  "AKI stage>=2 OR new RRT OR fixed-window all-location death"
+                  "AKI stage>=2 OR new RRT OR fixed-window death"
                 } else NA_character_,
                 events_trt = sum(y_t[ok]), events_ctl = sum(y_c[ok]),
                 sparse_lt20 = sum(y_t[ok]) < 20 || sum(y_c[ok]) < 20
