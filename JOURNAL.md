@@ -4226,3 +4226,195 @@ been exhausted. The remaining decision (cautionary paper / TTE pivot / shelve) i
 clinicians' — go to Su/Yan/Eadon.
 
 >>> NO CODEX TASK QUEUED. All eICU-rescue avenues exhausted. Analysis closed; next step is the clinician meeting. <<<
+
+---
+
+## Entry 39 — Clinician-guided albumin trigger-lab and ATE sensitivities (2026-07-20, Codex)
+
+### Scope, authorization, and estimator integrity
+
+This entry reports the requested labeled sensitivity round. Frozen v3.3 was
+not edited. The threshold and albumin-stratified analyses retain the frozen
+risk-set eligibility, first-albumin T0, 1:1 replacement matching, 0.2-SD
+caliper, MICE m=20, HC1 inference, S2+aortic database-specific covariates, and
+DR for post-match SMD >0.1. Only the `alb_cat` cut or the prespecified matching
+stratum changes. The IPTW analysis is explicitly a different patient-level
+ATE-style association and is not pooled with or called a robustness check of
+the matched ATT-like analysis.
+
+At execution start, the live local, `origin/main`, Tempest-integrity, and
+Tempest-runtime copies of `JOURNAL.md` ended at Entry 37; no Entry 38 text was
+available. The complete current user directive was therefore treated as the
+authorization and analysis contract. No missing journal content was invented.
+
+MIMIC is primary. eICU was feasible on the same Tempest inputs and is reported
+as supplementary. IUH was not feasible without restarting patient-level ETL:
+Quartz had no albumin-study `did_all_iuh`, Cr/lab/stream, or frozen-pair inputs
+remaining, only committed aggregates. Old `mg` patient data were not
+substituted.
+
+Execution and QC:
+
+- Local: `Rscript tests/test_trigger_estimand_static.R` and
+  `Rscript tests/test_phase3_static.R` — both PASS.
+- Tempest `4263915`: stopped before reading data because the launcher parsed
+  `mimic}`; the shell-only argument bug was corrected and committed.
+- Tempest `4263916`: completed an initial MIMIC run; superseded after correcting
+  the interaction sparse-cell flag only (no estimator change).
+- Tempest `4263920`: final MIMIC, COMPLETED exit 0, 4m29s.
+- Tempest `4263921`: final eICU, COMPLETED exit 0, 3m26s.
+- Each m=20 fit logged 200 MICE events, the already documented frozen-m20
+  pattern (Entry 13), not a new drift.
+- Aggregate QC: 18 CSVs/485 rows, no identifier columns; 3.5-cut estimates
+  reconcile with every frozen MIMIC/eICU OR/RD within absolute `1e-12`;
+  sparse flags exactly equal the `<20 events in either arm` rule.
+
+### 1. `alb_cat` threshold sweep
+
+The instruction's approximately 26% coverage refers to the older static
+`peri_admission_alb` field (27.2% of MIMIC treated and 29.0% of the source
+cohort). That window is not the frozen trigger covariate and can include
+post-infusion measurements. The current value-preserving, dynamically derived
+strictly-pre-own-index albumin is measured in **40.8% of the MIMIC source
+cohort and 46.3% of eligible treated patients**. These counts agree with Entry
+3 and the prior HTE cell counts. Thus a cut change can relabel only measured
+patients, but the empirically correct fraction is approximately 41% of the
+source cohort (46% of eligible treated), not 26%. The old static field was not
+used to force the expected percentage.
+
+MIMIC match/balance summary:
+
+| Cut (g/dL) | Low among all / measured | Matched | `alb_cat` SMD raw -> post | Max SMD / violations |
+|---:|---:|---:|---:|---:|
+| 3.5 | 8.18% / 20.02% | 5,428/5,428 (100.0%) | 0.225 -> 0.271 | 0.271 / 4 |
+| 3.0 | 3.58% / 8.76% | 5,427/5,428 (99.98%) | 0.225 -> 0.285 | 0.285 / 4 |
+| 2.5 | 1.55% / 3.79% | 5,428/5,428 (100.0%) | 0.225 -> 0.213 | 0.253 / 3 |
+
+MIMIC DR effects; values are OR [95% CI] and RD [95% CI]:
+
+| Cut | Outcome | OR | RD |
+|---:|---|---:|---:|
+| 3.5 | AKI>=1 48h | 1.88 [1.71, 2.07] | +0.123 [+0.105, +0.141] |
+| 3.5 | AKI>=1 7d | 1.76 [1.60, 1.94] | +0.119 [+0.099, +0.139] |
+| 3.5 | AKI>=2 48h | 1.97 [1.59, 2.45] | +0.024 [+0.016, +0.032] |
+| 3.5 | AKI>=2 7d | 1.92 [1.60, 2.30] | +0.037 [+0.027, +0.048] |
+| 3.0 | AKI>=1 48h | 2.01 [1.83, 2.22] | +0.133 [+0.115, +0.151] |
+| 3.0 | AKI>=1 7d | 1.85 [1.68, 2.03] | +0.126 [+0.107, +0.145] |
+| 3.0 | AKI>=2 48h | 2.17 [1.72, 2.73] | +0.026 [+0.019, +0.034] |
+| 3.0 | AKI>=2 7d | 2.00 [1.66, 2.40] | +0.039 [+0.028, +0.049] |
+| 2.5 | AKI>=1 48h | 1.91 [1.74, 2.10] | +0.125 [+0.108, +0.143] |
+| 2.5 | AKI>=1 7d | 1.81 [1.64, 1.98] | +0.125 [+0.105, +0.144] |
+| 2.5 | AKI>=2 48h | 1.86 [1.51, 2.29] | +0.023 [+0.015, +0.030] |
+| 2.5 | AKI>=2 7d | 1.80 [1.51, 2.15] | +0.036 [+0.025, +0.046] |
+
+Lowering the cut does not consistently improve MIMIC balance: 3.0 worsens
+`alb_cat` and maximum SMD, while 2.5 modestly improves `alb_cat` but leaves
+eGFR as the maximum imbalance (0.253). The AKI association remains in the same
+direction and approximate range; it is slightly larger at 3.0 and returns
+toward the frozen estimate at 2.5. No threshold is selected from these effects.
+
+Supplementary eICU shows better `alb_cat` balance as the cut falls (post SMD
+0.114, 0.094, 0.075; match 98.3-98.7%). AKI>=1 DR ORs are 1.24/1.24 at 3.5,
+1.44/1.41 at 3.0, and 1.28/1.22 at 2.5 for 48h/7d. AKI>=2 remains weaker and
+less precise. The nonmonotone eICU movement argues against treating any cut as
+a rescue.
+
+### 2. Albumin-stratified effect modification
+
+MIMIC matched DR estimates at cut 3.5:
+
+| Stratum | Matched | Balance | Outcome | OR | RD | Sparse |
+|---|---:|---:|---|---:|---:|:---:|
+| Low | 492/493 | max 0.403; 16 violations | AKI>=1 48h | 1.81 [1.27, 2.60] | +0.123 [+0.051, +0.194] | no |
+| Low | 492/493 | same | AKI>=1 7d | 1.24 [0.81, 1.88] | +0.046 [-0.046, +0.138] | no |
+| Low | 492/493 | same | AKI>=2 48h | 1.58 [0.84, 3.00] | +0.022 [-0.008, +0.052] | **yes (22/18)** |
+| Low | 492/493 | same | AKI>=2 7d | 1.01 [0.55, 1.87] | -0.005 [-0.062, +0.052] | no |
+| Normal | 2,018/2,021 | max 0.158; 1 violation | AKI>=1 48h / 7d | 1.99 / 1.91 | +0.131 / +0.133 | no |
+| Normal | 2,018/2,021 | same | AKI>=2 48h / 7d | 2.40 / 3.23 | +0.023 / +0.055 | no |
+| Missing | 2,914/2,914 | max 0.197; 2 violations | AKI>=1 48h / 7d | 1.92 / 1.89 | +0.126 / +0.133 | no |
+| Missing | 2,914/2,914 | same | AKI>=2 48h / 7d | 2.55 / 3.06 | +0.032 / +0.054 | no |
+
+Formal MIMIC omnibus interaction P values:
+
+| Outcome | OR scale | RD scale | Sparse-cell flag |
+|---|---:|---:|:---:|
+| AKI>=1 48h | .692 | .849 | no |
+| AKI>=1 7d | .042 | .081 | no |
+| AKI>=2 48h | .133 | .340 | **yes; minimum cell 18** |
+| AKI>=2 7d | <.001 | .032 | no; minimum cell 26 |
+
+This is not coherent evidence of baseline-albumin modification. AKI>=1 at 48h
+is flat; its 7d interaction crosses .05 only on the OR scale. The AKI>=2 48h
+test is sparse. Although AKI>=2 7d is significant on both scales, the low-
+albumin stratum has severe residual imbalance (16/22 covariates over 0.1,
+maximum eGFR SMD 0.403) and a near-null estimate, whereas normal and missing
+strata carry the large estimates. That pattern is neither monotone nor secure
+enough to interpret as a biological modifier.
+
+eICU supplies a useful direction check: all eight omnibus interaction tests
+are null (OR/RD P=.118/.096 for AKI>=1 48h; .282/.265 at 7d; .928/.917 for
+AKI>=2 48h, sparse; .554/.546 at 7d). Its low/normal/missing AKI>=1 48h ORs
+are 1.28, 0.95, and 1.47. Thus albumin-stratified HTE does not replicate.
+
+### 3. Stabilized-IPTW ATE sensitivity
+
+Because the frozen risk-set cohort has no common untreated treatment-decision
+time, this conventional patient-level sensitivity uses first albumin as the
+treated index and earliest qualifying ICU creatinine as the never-treated
+index. It therefore answers a broader associational ATE-style question and is
+not a target-trial replacement for the matched estimator. Weights were not
+trimmed post hoc.
+
+| DB | N treated/control | ESS | Max weighted SMD / violations | Weight p99 / max |
+|---|---:|---:|---:|---:|
+| MIMIC | 5,428 / 6,818 | 3,142 | 0.155 / 1 (`vent_at_t0`) | 6.17 / 72.65 |
+| eICU | 1,981 / 15,161 | 15,558 | 0.280 / 2 (lactate, hemoglobin) | 2.12 / 6.44 |
+
+IPTW estimates, OR [95% CI] and RD [95% CI]:
+
+| DB | Outcome | Weighted rates T/C | OR | RD |
+|---|---|---:|---:|---:|
+| MIMIC | AKI>=1 48h | 37.8% / 23.8% | 1.94 [1.66, 2.28] | +0.140 [+0.105, +0.175] |
+| MIMIC | AKI>=1 7d | 42.5% / 27.5% | 1.94 [1.66, 2.27] | +0.150 [+0.113, +0.186] |
+| MIMIC | AKI>=2 48h | 4.56% / 2.72% | 1.71 [1.25, 2.33] | +0.018 [+0.008, +0.029] |
+| MIMIC | AKI>=2 7d | 8.24% / 4.94% | 1.73 [1.32, 2.26] | +0.033 [+0.015, +0.050] |
+| eICU | AKI>=1 48h | 23.2% / 13.4% | 1.95 [1.68, 2.26] | +0.098 [+0.072, +0.123] |
+| eICU | AKI>=1 7d | 26.0% / 15.8% | 1.88 [1.64, 2.17] | +0.103 [+0.077, +0.129] |
+| eICU | AKI>=2 48h | 3.08% / 1.44% | 2.17 [1.55, 3.02] | +0.016 [+0.007, +0.026] |
+| eICU | AKI>=2 7d | 5.11% / 3.05% | 1.71 [1.33, 2.19] | +0.021 [+0.009, +0.032] |
+
+The requested plain-language ATE read is: **patients who receive albumin have
+higher weighted AKI risk, with treatment indication included in that
+contrast**. It does not establish that giving albumin causes that excess. The
+MIMIC weights are highly variable (maximum 72.6; treated ESS only 926), and
+eICU retains material weighted imbalance. The fact that both IPTW associations
+are larger than their matched counterparts reflects a different population,
+index contract, and residual indication structure; it is not “agreement” or
+“robustness” of the frozen matched estimand.
+
+### Honest synthesis
+
+Lowering the trigger cut does not meaningfully solve MIMIC balance or change
+the direction/magnitude class of the AKI association; 3.0 is slightly worse
+and 2.5 only modestly improves `alb_cat`. Albumin-stratified matching does not
+reveal a consistent, cross-scale, cross-database modifier: the apparent MIMIC
+7d stage>=2 interaction is carried by poorly balanced/nonmonotone strata and
+does not replicate in eICU. IPTW adds the distinct population-average fact
+that ever-treated patients have appreciably higher weighted AKI risk, but its
+positivity/balance and time-index limitations make confounding by indication,
+not causal robustness, the appropriate interpretation. None of these labeled
+sensitivities changes the frozen v3.3 conclusion.
+
+### Aggregate artifacts and gate
+
+Committed aggregate families (MIMIC and eICU; 18 CSVs total):
+
+- `results/trigger_threshold_{balance,prevalence,effects}_<db>.csv`
+- `results/albumin_stratified_{balance,effects,interaction}_<db>.csv`
+- `results/iptw_ate_{balance,effects,weights}_<db>.csv`
+
+No pairs, weights by patient, IDs, or other patient-level tables were written
+locally or committed. All source data remain on Tempest; IUH source data remain
+on Quartz.
+
+>>> RESULTS-GATE STOP. Entry 39 is ready for supervisor review; frozen v3.3 remains unchanged. <<<

@@ -1,0 +1,24 @@
+"db","analysis","variable_code","variable","raw_smd","weighted_smd"
+"MIMIC","stabilized_iptw_ate","age","age",0.153945715258854,0.00907173416656535
+"MIMIC","stabilized_iptw_ate","is_female","sex",0.0231949401742149,0.0063619561452911
+"MIMIC","stabilized_iptw_ate","bmi","BMI",0.0342416893848098,0.032241817191865
+"MIMIC","stabilized_iptw_ate","surg_cabg","CABG surgery",0.128069655214088,0.0471359093915193
+"MIMIC","stabilized_iptw_ate","surg_valve","valve surgery",0.213653896162858,0.0501669629137613
+"MIMIC","stabilized_iptw_ate","surg_combined","combined surgery",0.256877570804033,0.0106979650753791
+"MIMIC","stabilized_iptw_ate","heart_failure","heart failure",0.0795511179030226,0.0448785383242332
+"MIMIC","stabilized_iptw_ate","hypertension","hypertension",0.0333569217341405,0.0143091646999579
+"MIMIC","stabilized_iptw_ate","diabetes","diabetes",0.0272099597822026,0.00460975896742203
+"MIMIC","stabilized_iptw_ate","copd","COPD",0.0226289730025729,0.0281762719333758
+"MIMIC","stabilized_iptw_ate","pvd","peripheral vascular disease",0.00822938716721134,0.0473642856992901
+"MIMIC","stabilized_iptw_ate","stroke","stroke",0.0244647264789157,0.0351867950211015
+"MIMIC","stabilized_iptw_ate","liver_disease","liver disease",0.0769223310329929,0.0293609421081827
+"MIMIC","stabilized_iptw_ate","egfr","baseline (at ICU T0): eGFR",0.133446719837875,0.0614185918047027
+"MIMIC","stabilized_iptw_ate","last_lactate","baseline (at ICU T0): lactate",0.123400838259792,0.0227207834843343
+"MIMIC","stabilized_iptw_ate","last_lactate_missing","baseline (at ICU T0): lactate missing",0.990061678846367,0.00588775788817324
+"MIMIC","stabilized_iptw_ate","last_heartrate","baseline (at ICU T0): heart rate",0.254897601260838,0.0155704247860491
+"MIMIC","stabilized_iptw_ate","last_hemoglobin","baseline (at ICU T0): hemoglobin",0.681078506829422,0.0562529933350365
+"MIMIC","stabilized_iptw_ate","alb_cat","baseline (at ICU T0): serum albumin category",0.225783162393006,0.031511876692166
+"MIMIC","stabilized_iptw_ate","vaso_at_t0","baseline (at ICU T0): vasopressor status",0.6953467028308,0.0912307465586855
+"MIMIC","stabilized_iptw_ate","map_before_t0","baseline (at ICU T0): MAP",0.565191086460215,0.0533568557760654
+"MIMIC","stabilized_iptw_ate","vent_at_t0","baseline (at ICU T0): ventilation status",0.327747942379391,0.155467936185391
+"MIMIC","stabilized_iptw_ate","surg_aortic","aortic surgery",0.113339443197989,0.0184893685825762

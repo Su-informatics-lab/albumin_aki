@@ -1,0 +1,21 @@
+"db","analysis","variable_code","variable","raw_smd","weighted_smd"
+"EICU","stabilized_iptw_ate","age","age",0.0763446736512662,0.0666011637564363
+"EICU","stabilized_iptw_ate","is_female","sex",0.109857197542402,0.00247522851091117
+"EICU","stabilized_iptw_ate","bmi","BMI",0.0192386968202189,0.0313203348453015
+"EICU","stabilized_iptw_ate","surg_cabg","CABG surgery",0.382420426713967,0.0343962911039034
+"EICU","stabilized_iptw_ate","surg_valve","valve surgery",0.178100800651954,0.0370825996438459
+"EICU","stabilized_iptw_ate","surg_combined","combined surgery",0.1437669971179,0.0252006621921378
+"EICU","stabilized_iptw_ate","heart_failure","heart failure",0.0474638562964412,0.00589480065540689
+"EICU","stabilized_iptw_ate","hypertension","hypertension",0.0843962811231164,0.0276024875847699
+"EICU","stabilized_iptw_ate","diabetes","diabetes",0.0170493808487584,0.000557142760056364
+"EICU","stabilized_iptw_ate","copd","COPD",0.0961675393375925,0.0205073337632995
+"EICU","stabilized_iptw_ate","pvd","peripheral vascular disease",0.026290834360561,0.00270561022050423
+"EICU","stabilized_iptw_ate","stroke","stroke",0.0417656305401033,0.0022925489798955
+"EICU","stabilized_iptw_ate","liver_disease","liver disease",0.0262972350203739,0.0154652817115926
+"EICU","stabilized_iptw_ate","egfr","baseline (at ICU T0): eGFR",0.0512608876754653,0.0330553149427158
+"EICU","stabilized_iptw_ate","last_lactate","baseline (at ICU T0): lactate",0.412445806759271,0.279522428961762
+"EICU","stabilized_iptw_ate","last_lactate_missing","baseline (at ICU T0): lactate missing",0.315995898750942,0.0449928059227657
+"EICU","stabilized_iptw_ate","last_heartrate","baseline (at ICU T0): heart rate",0.151574523240985,0.0416016977022981
+"EICU","stabilized_iptw_ate","last_hemoglobin","baseline (at ICU T0): hemoglobin",0.0694372175277026,0.123847097672868
+"EICU","stabilized_iptw_ate","alb_cat","baseline (at ICU T0): serum albumin category",0.49454472175764,0.0136018900972663
+"EICU","stabilized_iptw_ate","surg_aortic","aortic surgery",0.146035064429762,0.00659470189990821
